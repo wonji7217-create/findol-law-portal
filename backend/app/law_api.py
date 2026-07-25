@@ -12,8 +12,8 @@ import httpx
 import xmltodict
 from typing import Optional
 
-LAW_SEARCH_URL = "http://www.law.go.kr/DRF/lawSearch.do"
-LAW_SERVICE_URL = "http://www.law.go.kr/DRF/lawService.do"
+LAW_SEARCH_URL = "https://www.law.go.kr/DRF/lawSearch.do"
+LAW_SERVICE_URL = "https://www.law.go.kr/DRF/lawService.do"
 
 
 class LawApiError(Exception):
