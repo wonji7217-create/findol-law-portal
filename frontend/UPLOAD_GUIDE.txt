@@ -1,0 +1,12 @@
+findol v5.2 김돌 이미지 크기 수정
+
+GitHub의 기존 frontend 폴더에 아래 파일을 덮어쓰세요.
+- frontend/index.html
+- frontend/style.css
+- frontend/assets/kimdol-mascot.png
+
+중요:
+1) 압축을 푼 뒤 "frontend" 폴더 안의 파일을 기존 GitHub frontend 폴더에 덮어씁니다.
+2) 업로드 후 Render 배포가 Live가 될 때까지 기다립니다.
+3) 접속 후 Ctrl + F5를 눌러 강력 새로고침합니다.
+   (이번 버전에는 style.css?v=5.2 캐시 무효화도 적용되어 있습니다.)

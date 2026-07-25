@@ -1768,3 +1768,67 @@ main { max-width: var(--content); padding: 28px 28px 88px; }
 @media (max-width: 760px) {
   .kimdol-mascot-image { width: min(82vw, 280px); margin-inline: auto; }
 }
+
+/* ============================================================
+   v5.2 — 김돌 이미지 크기 안전장치 + 브라우저 캐시 대응
+   HTML 자체에도 width/height를 넣어 CSS가 늦게 로드되어도 화면이 무너지지 않게 함.
+   ============================================================ */
+.brand-mascot {
+  width: 45px !important;
+  height: 45px !important;
+  min-width: 45px !important;
+  max-width: 45px !important;
+  min-height: 45px !important;
+  max-height: 45px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  flex: 0 0 45px !important;
+}
+.brand-mascot img {
+  width: 45px !important;
+  height: 45px !important;
+  min-width: 0 !important;
+  max-width: 45px !important;
+  min-height: 0 !important;
+  max-height: 45px !important;
+  object-fit: contain !important;
+  display: block !important;
+}
+.hero-mascot-card {
+  overflow: hidden !important;
+}
+.kimdol-mascot-image {
+  width: min(100%, 330px) !important;
+  height: auto !important;
+  max-width: 330px !important;
+  max-height: 330px !important;
+  object-fit: contain !important;
+  display: block !important;
+  margin: 0 auto !important;
+}
+@media (max-width: 820px) {
+  .brand-mascot,
+  .brand-mascot img {
+    width: 39px !important;
+    height: 39px !important;
+    min-width: 39px !important;
+    max-width: 39px !important;
+    min-height: 39px !important;
+    max-height: 39px !important;
+    flex-basis: 39px !important;
+  }
+  .kimdol-mascot-image {
+    width: min(74vw, 260px) !important;
+    max-width: 260px !important;
+    max-height: 260px !important;
+  }
+}
+@media (max-width: 520px) {
+  .kimdol-mascot-image {
+    width: min(72vw, 225px) !important;
+    max-width: 225px !important;
+    max-height: 225px !important;
+  }
+}
