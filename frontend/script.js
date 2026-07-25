@@ -294,10 +294,19 @@ function renderSearchResults(container, items, fallbackKind, options = {}) {
 }
 
 $("searchReset").addEventListener("click", () => $("searchResults").classList.remove("is-visible"));
-document.querySelectorAll(".quick-tag").forEach((button) => button.addEventListener("click", () => {
+document.querySelectorAll("[data-query]").forEach((button) => button.addEventListener("click", () => {
   searchInput.value = button.dataset.query;
   searchForm.requestSubmit();
 }));
+// 홈 화면의 검색 바로가기
+document.querySelectorAll("[data-search-focus]").forEach((button) => button.addEventListener("click", () => {
+  activateTab("search");
+  requestAnimationFrame(() => {
+    searchInput.focus();
+    searchInput.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}));
+
 
 const SHORTCUTS = [
   ["제조·사용시설", "핵심 시설분류", "제조·사용시설", "⚗"],
