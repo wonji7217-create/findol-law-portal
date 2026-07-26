@@ -2461,3 +2461,120 @@ main { max-width: var(--content); padding: 28px 28px 88px; }
     gap: 2px;
   }
 }
+
+/* ============================================================
+   findol v5.7 — 유관기관 바로가기 복원
+   ============================================================ */
+.institution-section {
+  margin-top: 17px;
+  padding: 23px;
+  scroll-margin-top: 94px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 19px;
+  box-shadow: var(--shadow-soft);
+}
+.institution-section-head {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+.institution-section-head h2 {
+  margin: 3px 0 0;
+  color: #17212A;
+  font-size: 22px;
+  letter-spacing: -.035em;
+}
+.institution-section-head p {
+  margin: 5px 0 0;
+  color: #768089;
+  font-size: 12px;
+}
+.institution-status {
+  flex-shrink: 0;
+  color: #66717A;
+  font-size: 11px;
+  font-weight: 700;
+}
+.institution-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.institution-link {
+  min-width: 0;
+  min-height: 88px;
+  padding: 15px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 12px;
+  background: #FBFCFB;
+  border: 1px solid #E6EAE7;
+  border-radius: 14px;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.institution-link:hover {
+  transform: translateY(-2px);
+  background: #fff;
+  border-color: #BBD0CA;
+  box-shadow: 0 9px 20px rgba(31,41,51,.055);
+}
+.institution-mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  color: #174F50;
+  background: #E9F3F0;
+  border: 1px solid #D4E4DF;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 850;
+}
+.institution-mark.data-mark { color: #665118; background: #F7F2D8; border-color: #ECE3B6; }
+.institution-mark.search-mark { color: #31586C; background: #EAF2F6; border-color: #D4E3EA; }
+.institution-mark.notice-mark { color: #5D4770; background: #F1ECF6; border-color: #E0D6E8; }
+.institution-mark.inspect-mark { color: #6C4838; background: #F8ECE6; border-color: #ECD8CE; }
+.institution-mark.msds-mark { color: #3F5B43; background: #ECF3E9; border-color: #D9E6D4; }
+.institution-copy { min-width: 0; }
+.institution-copy strong {
+  display: block;
+  overflow: hidden;
+  color: #26313A;
+  font-size: 13px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.institution-copy small {
+  display: block;
+  margin-top: 4px;
+  color: #7A838A;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+.institution-arrow {
+  color: #6C767E;
+  font-size: 14px;
+  font-weight: 700;
+}
+.institution-note {
+  margin: 13px 1px 0;
+  color: #89918E;
+  font-size: 10px;
+}
+
+@media (max-width: 900px) {
+  .institution-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .institution-section { padding: 17px; border-radius: 16px; }
+  .institution-section-head { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .institution-section-head h2 { font-size: 19px; }
+  .institution-status { display: none; }
+  .institution-grid { grid-template-columns: 1fr; }
+  .institution-link { min-height: 78px; padding: 13px; }
+}
