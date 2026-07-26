@@ -1,0 +1,11 @@
+findol v5.3 적용 방법
+
+1. 압축을 풉니다.
+2. GitHub 저장소 첫 화면에서 Add file → Upload files를 누릅니다.
+3. 압축 안의 backend와 frontend 폴더를 저장소 최상위에 드래그합니다.
+4. 업로드 목록의 경로가 backend/app/main.py, frontend/index.html처럼 시작하는지 확인합니다.
+5. Commit changes를 누릅니다.
+6. Render가 자동 재배포되어 Live가 될 때까지 기다립니다.
+7. 사이트에서 Ctrl+F5로 강력 새로고침합니다.
+
+주의: (배포용)backend 같은 새 폴더를 만들지 말고, 기존 backend와 frontend에 덮어써야 합니다.
