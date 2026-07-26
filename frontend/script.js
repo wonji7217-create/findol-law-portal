@@ -11,6 +11,18 @@ let archiveTotal = 0;
 let calendarEvents = [];
 let selectedCalendarDate = null;
 
+function getFindolSessionId() {
+  const key = "findol-search-session";
+  let value = localStorage.getItem(key);
+  if (!value) {
+    value = window.crypto?.randomUUID?.() || `findol-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(key, value);
+  }
+  return value;
+}
+
+const FINDOL_SEARCH_SESSION = getFindolSessionId();
+
 function escapeHtml(value) {
   const div = document.createElement("div");
   div.textContent = value ?? "";
@@ -67,6 +79,7 @@ function emptyState(title, description = "") {
 const navTabs = document.querySelectorAll(".nav-tab");
 const panels = {
   search: $("panel-search"),
+  substances: $("panel-substances"),
   archive: $("panel-archive"),
   calendar: $("panel-calendar"),
 };
@@ -77,6 +90,7 @@ function activateTab(tabName) {
   $("mobileNav").classList.remove("is-open");
   $("mobileMenuButton").setAttribute("aria-expanded", "false");
 
+  if (tabName === "substances") loadSubstanceMeta();
   if (tabName === "archive") loadArchive(true);
   if (tabName === "calendar") loadCalendar();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -89,41 +103,7 @@ $("mobileMenuButton").addEventListener("click", () => {
   const open = $("mobileNav").classList.toggle("is-open");
   $("mobileMenuButton").setAttribute("aria-expanded", String(open));
 });
-const officialLawButton = $("officialLawButton");
-if (officialLawButton) officialLawButton.addEventListener("click", () => window.open("https://www.law.go.kr", "_blank", "noopener"));
-
-
-// -----------------------------------------------------------------------------
-// 유관기관 · 지방환경청 선택 팝업
-// -----------------------------------------------------------------------------
-let institutionModalReturnFocus = null;
-
-function openInstitutionModal() {
-  institutionModalReturnFocus = document.activeElement;
-  $("institutionModal").hidden = false;
-  document.body.classList.add("modal-open");
-  $("regionalOfficeButton").setAttribute("aria-expanded", "true");
-  requestAnimationFrame(() => $("institutionModalClose").focus());
-}
-
-function closeInstitutionModal() {
-  $("institutionModal").hidden = true;
-  document.body.classList.remove("modal-open");
-  $("regionalOfficeButton").setAttribute("aria-expanded", "false");
-  if (institutionModalReturnFocus && typeof institutionModalReturnFocus.focus === "function") {
-    institutionModalReturnFocus.focus();
-  }
-}
-
-$("regionalOfficeButton").setAttribute("aria-expanded", "false");
-$("regionalOfficeButton").addEventListener("click", openInstitutionModal);
-$("institutionModalClose").addEventListener("click", closeInstitutionModal);
-$("institutionModal").addEventListener("click", (event) => {
-  if (event.target === $("institutionModal")) closeInstitutionModal();
-});
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !$("institutionModal").hidden) closeInstitutionModal();
-});
+$("officialLawButton").addEventListener("click", () => window.open("https://www.law.go.kr", "_blank", "noopener"));
 
 // -----------------------------------------------------------------------------
 // 즐겨찾기
@@ -203,7 +183,9 @@ searchForm.addEventListener("submit", async (event) => {
   const includeAdmrul = scope !== "law";
 
   try {
-    const response = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(q)}&include_admrul=${includeAdmrul}&chem_only=true&smart=true`);
+    const response = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(q)}&include_admrul=${includeAdmrul}&chem_only=true&smart=true`, {
+      headers: { "X-Findol-Session": FINDOL_SEARCH_SESSION },
+    });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.detail || `서버 오류 (${response.status})`);
 
@@ -237,7 +219,8 @@ searchForm.addEventListener("submit", async (event) => {
     $("searchResultCount").textContent = `${displayedTotal}건 · 아카이브 신규 ${data.newly_saved || 0}건`;
 
     $("searchIntentSummary").textContent = data.intent_summary || data.intent || "관련 법령·행정규칙 확인";
-    $("topicChips").innerHTML = (data.topics || []).map((topic) => `<span class="topic-chip"><b>${escapeHtml(topic.label)}</b><small>${escapeHtml((topic.matched_terms || []).slice(0, 3).join(" · "))}</small></span>`).join("") || `<span class="topic-chip neutral"><b>통합검색</b><small>명확한 시설·업무 주제가 감지되지 않았어요.</small></span>`;
+    $("topicChips").innerHTML = (data.topics || []).map((topic) => `<span class="topic-chip"><b>${escapeHtml(topic.label)}</b><small>${escapeHtml((topic.matched_terms || []).slice(0, 3).join(" · "))}</small></span>`).join("") || `<span class="topic-chip neutral"><b>통합검색</b><small>명확한 시설·업무 또는 물질이 감지되지 않았어요.</small></span>`;
+    renderSubstances(data.substances || [], data.substance_verified_on, data.substance_notice);
 
     $("checklistItems").innerHTML = (data.checklist || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("") || `<li>공식 법령명과 최신 시행일을 확인해 주세요.</li>`;
     $("expandedTerms").innerHTML = (data.expanded_terms || []).map((term) => `<button type="button" class="term-chip" data-expanded-query="${escapeHtml(term)}">${escapeHtml(term)}</button>`).join("");
@@ -261,6 +244,7 @@ searchForm.addEventListener("submit", async (event) => {
 
     $("searchResults").scrollIntoView({ behavior: "smooth", block: "start" });
     loadHomeDashboard();
+    loadPopularSearches();
   } catch (error) {
     $("searchResultTitle").textContent = "검색 중 오류가 발생했어요";
     $("searchPlan").hidden = true;
@@ -268,6 +252,38 @@ searchForm.addEventListener("submit", async (event) => {
     ["upper-law-results", "related-rule-results", "law-results", "admrul-results"].forEach((id) => { $(id).innerHTML = ""; });
   }
 });
+
+function renderSubstances(items, verifiedOn, notice) {
+  const panel = $("substancePanel");
+  if (!items.length) {
+    panel.hidden = true;
+    $("substanceCards").innerHTML = "";
+    return;
+  }
+
+  $("substanceVerified").textContent = verifiedOn ? verifiedOn.replaceAll("-", ".") : "확인 필요";
+  $("substanceNotice").textContent = notice || "제품 함량과 혼합물 구성까지 공식 원문에서 확인해 주세요.";
+  $("substanceCards").innerHTML = items.map((item) => {
+    const classifications = (item.classifications || []).map((classification) => `
+      <div class="substance-status ${escapeHtml(classification.tone || "info")}">
+        <span>${escapeHtml(classification.system || "적용체계")}</span>
+        <strong>${escapeHtml(classification.status || "확인 필요")}</strong>
+        <p>${escapeHtml(classification.detail || "")}</p>
+      </div>`).join("");
+    const dates = (item.important_dates || []).map((date) => `
+      <li><span>${escapeHtml(date.label)}</span><strong>${escapeHtml(formatDate(date.date))}</strong></li>`).join("");
+    return `<article class="substance-card">
+      <div class="substance-identity">
+        <div><span class="substance-kicker">CHEMICAL PROFILE</span><h4>${escapeHtml(item.name)}</h4><p>${escapeHtml(item.english_name || "")}</p></div>
+        <div class="substance-meta"><span>CAS</span><strong>${escapeHtml(item.cas_no || "확인 필요")}</strong><small>${escapeHtml(item.formula || "")}${item.input_concentration ? ` · 입력함량 ${escapeHtml(item.input_concentration)}` : ""}</small></div>
+      </div>
+      <p class="substance-summary">${escapeHtml(item.summary || "관련 법령·고시를 확인합니다.")}</p>
+      <div class="substance-status-grid">${classifications}</div>
+      ${dates ? `<ul class="substance-date-list">${dates}</ul>` : ""}
+    </article>`;
+  }).join("");
+  panel.hidden = false;
+}
 
 function renderAmbiguities(items) {
   if (!items.length) {
@@ -342,18 +358,59 @@ document.querySelectorAll("[data-search-focus]").forEach((button) => button.addE
 }));
 
 
-const SHORTCUTS = [
-  ["제조·사용시설", "핵심 시설분류", "제조·사용시설", "⚗"],
-  ["저장시설", "고정식 탱크·저장조", "저장시설", "▣"],
-  ["보관시설", "드럼·IBC·용기", "보관시설", "▤"],
-  ["소량취급시설", "기준수량·검사", "소량취급시설", "◇"],
-  ["검사·안전진단", "설치·정기·수시검사", "설치검사 안전진단", "⌕"],
-  ["화학사고예방관리계획서", "작성·검토·이행", "화학사고예방관리계획서", "♢"],
+const RECOMMENDED_SEARCHES = [
+  ["설치검사", "취급시설 설치 전 확인", "설치검사"],
+  ["변경신고", "물질·시설 변경 검토", "영업허가 변경신고"],
+  ["저장시설", "탱크·저장조 기준", "저장시설"],
+  ["소량취급시설", "기준수량과 검사 범위", "소량취급시설"],
+  ["화학사고예방관리계획서", "작성·검토·이행", "화학사고예방관리계획서"],
+  ["안전진단", "검사 주기와 대상", "안전진단"],
 ];
 
-function renderShortcuts() {
-  $("lawShortcuts").innerHTML = SHORTCUTS.map(([title, type, query, icon]) => `<button class="law-shortcut" type="button" data-shortcut-query="${escapeHtml(query)}"><span class="law-icon">${icon}</span><strong>${escapeHtml(title)}</strong><span>${escapeHtml(type)}</span></button>`).join("");
-  document.querySelectorAll("[data-shortcut-query]").forEach((button) => button.addEventListener("click", () => { searchInput.value = button.dataset.shortcutQuery; searchForm.requestSubmit(); }));
+function bindPopularSearchButtons() {
+  document.querySelectorAll("[data-shortcut-query]").forEach((button) => button.addEventListener("click", () => {
+    searchInput.value = button.dataset.shortcutQuery;
+    searchForm.requestSubmit();
+  }));
+}
+
+function renderRecommendedSearches() {
+  $("popularSearchKicker").textContent = "추천 검색어";
+  $("popularSearchTitle").textContent = "실무에서 먼저 찾는 항목";
+  $("popularSearchNote").textContent = "아직 실제 검색 데이터가 충분하지 않아 기본 실무 검색어를 보여줘요. 검색이 쌓이면 자동으로 인기 순위로 바뀝니다.";
+  $("lawShortcuts").innerHTML = RECOMMENDED_SEARCHES.map(([title, description, query], index) => `
+    <button class="law-shortcut" type="button" data-shortcut-query="${escapeHtml(query)}">
+      <span class="popular-rank" aria-hidden="true">${index + 1}</span>
+      <span class="popular-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(description)}</small></span>
+      <span class="popular-tag">추천</span>
+    </button>`).join("");
+  bindPopularSearchButtons();
+}
+
+async function loadPopularSearches() {
+  try {
+    const response = await fetch(`${API_BASE}/api/search/popular?days=30&limit=6`);
+    if (!response.ok) throw new Error("검색 통계를 불러오지 못했습니다.");
+    const data = await response.json();
+    const items = data.items || [];
+    if (!items.length) {
+      renderRecommendedSearches();
+      return;
+    }
+
+    $("popularSearchKicker").textContent = "최근 30일 실제 검색";
+    $("popularSearchTitle").textContent = "많이 찾은 검색어";
+    $("popularSearchNote").textContent = `findol 내부 검색 ${data.total_events || 0}건을 기준으로 집계했어요. 같은 브라우저의 짧은 시간 내 반복 검색은 한 번만 반영합니다.`;
+    $("lawShortcuts").innerHTML = items.map((item) => `
+      <button class="law-shortcut" type="button" data-shortcut-query="${escapeHtml(item.query)}">
+        <span class="popular-rank" aria-hidden="true">${item.rank}</span>
+        <span class="popular-copy"><strong>${escapeHtml(item.query)}</strong><small>${escapeHtml(item.topic_label || "관련 규정 통합검색")}</small></span>
+        <span class="popular-count">${item.count}회</span>
+      </button>`).join("");
+    bindPopularSearchButtons();
+  } catch (error) {
+    renderRecommendedSearches();
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -620,10 +677,252 @@ function renderMonthEvents() {
   bindArchiveOpenButtons();
 }
 
+
+// -----------------------------------------------------------------------------
+// 물질검색 — 엑셀 현행자료 + 별도 개정·행정예고 이벤트
+// -----------------------------------------------------------------------------
+let materialMetaLoaded = false;
+const substanceSearchForm = $("substance-search-form");
+const substanceSearchInput = $("substance-search-input");
+
+async function loadSubstanceMeta() {
+  if (materialMetaLoaded) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/substances/meta`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || "자료 정보를 불러오지 못했습니다.");
+    $("substanceDatasetTitle").textContent = data.dataset_name || "화학물질 다운로드 자료";
+    $("substanceDatasetDate").textContent = data.data_date ? data.data_date.replaceAll("-", ".") : "확인 필요";
+    $("substanceDatasetCount").textContent = Number(data.row_count || 0).toLocaleString("ko-KR") + "건";
+    $("substanceCasCount").textContent = Number(data.cas_count || 0).toLocaleString("ko-KR") + "건";
+    $("substanceKoreanCount").textContent = Number(data.name_ko_count || 0).toLocaleString("ko-KR") + "건";
+    materialMetaLoaded = true;
+  } catch (error) {
+    $("substanceDatasetTitle").textContent = "자료 정보를 확인하지 못했어요.";
+    $("substanceDatasetDate").textContent = "-";
+  }
+}
+
+function openSubstanceTab(query = "") {
+  activateTab("substances");
+  if (query) {
+    substanceSearchInput.value = query;
+    runSubstanceSearch(query);
+  } else {
+    setTimeout(() => substanceSearchInput.focus(), 250);
+  }
+}
+
+substanceSearchForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const query = substanceSearchInput.value.trim();
+  if (query) runSubstanceSearch(query);
+});
+
+document.querySelectorAll("[data-substance-query]").forEach((button) => {
+  button.addEventListener("click", () => {
+    substanceSearchInput.value = button.dataset.substanceQuery;
+    runSubstanceSearch(button.dataset.substanceQuery);
+  });
+});
+
+$("substanceResultReset").addEventListener("click", () => {
+  $("substanceSearchResults").hidden = true;
+  $("substanceStartGuide").hidden = false;
+  $("substanceResultBody").innerHTML = "";
+  substanceSearchInput.value = "";
+  substanceSearchInput.focus();
+});
+
+async function runSubstanceSearch(query) {
+  await loadSubstanceMeta();
+  $("substanceStartGuide").hidden = true;
+  $("substanceSearchResults").hidden = false;
+  $("substanceResultHeading").textContent = `“${query}” 검색 중...`;
+  $("substanceResultSummary").textContent = "공식 다운로드 자료와 개정 예정정보를 함께 확인하고 있어요.";
+  $("substanceResultBody").innerHTML = `<div class="substance-loading"><span></span><strong>물질정보를 찾고 있어요...</strong></div>`;
+  $("substanceSearchResults").scrollIntoView({ behavior: "smooth", block: "start" });
+
+  try {
+    const response = await fetch(`${API_BASE}/api/substances/search?q=${encodeURIComponent(query)}&limit=10`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || `서버 오류 (${response.status})`);
+    renderSubstanceSearch(data);
+  } catch (error) {
+    $("substanceResultHeading").textContent = "검색하지 못했어요.";
+    $("substanceResultSummary").textContent = error.message;
+    $("substanceResultBody").innerHTML = emptyState("물질검색 결과를 불러오지 못했어요.", error.message);
+  }
+}
+
+function renderSubstanceSearch(data) {
+  const parsed = data.query || {};
+  const items = data.items || [];
+  const suggestions = data.suggestions || [];
+  const concentration = parsed.concentration_label ? ` · 입력 함량 ${parsed.concentration_label}` : "";
+  $("substanceResultHeading").textContent = `“${parsed.raw_query || ""}” 검색 결과`;
+
+  if (!items.length) {
+    $("substanceResultSummary").textContent = suggestions.length
+      ? "정확히 일치하는 물질 대신 비슷한 표현을 찾았습니다."
+      : "현재 등록된 다운로드 자료에서 일치하는 물질을 찾지 못했습니다.";
+    $("substanceResultBody").innerHTML = suggestions.length
+      ? renderSubstanceSuggestions(suggestions, parsed)
+      : `<div class="substance-no-result">${emptyState("등록 자료에서 찾지 못했어요.", "검색 결과 없음은 규제 대상이 아니라는 뜻이 아닙니다. CAS 번호 또는 MSDS의 공식 영문명을 확인해 주세요.")}<div class="no-result-actions"><button class="secondary-button" type="button" data-open-law-search="${escapeHtml(parsed.raw_query || "")}">법령 통합검색에서 확인</button></div></div>`;
+    bindSubstanceResultActions();
+    return;
+  }
+
+  const exactText = data.match_type === "exact" ? "정확히 일치" : "일부 일치";
+  $("substanceResultSummary").textContent = `${exactText} ${items.length}건${concentration} · 자료 기준 ${data.meta?.data_date?.replaceAll("-", ".") || "확인 필요"}`;
+
+  if (data.match_type === "partial" && items.length > 1) {
+    $("substanceResultBody").innerHTML = renderCandidateList(items, parsed);
+  } else {
+    $("substanceResultBody").innerHTML = items.map((item, index) => renderSubstanceDetail(item, parsed, data, index)).join("");
+  }
+  bindSubstanceResultActions();
+}
+
+function renderCandidateList(items, parsed) {
+  return `<section class="candidate-section">
+    <div class="candidate-section-head"><span class="plan-label">검색 후보</span><h3>어떤 물질을 찾으셨나요?</h3><p>물질명이 비슷한 경우 CAS 번호를 확인한 뒤 선택하세요.</p></div>
+    <div class="candidate-list">${items.map((item) => `<button class="candidate-card" type="button" data-substance-cas="${escapeHtml(item.cas_no || "")}">
+      <span class="candidate-index">${String(item.source_no || "").padStart(2, "0")}</span>
+      <span><strong>${escapeHtml(item.display_name)}</strong><small>${escapeHtml(item.name_en || "영문명 미기재")}</small></span>
+      <span class="candidate-cas">CAS ${escapeHtml(item.cas_no || "미기재")}</span><i>›</i>
+    </button>`).join("")}</div>
+    <p class="candidate-warning">현재 입력: ${escapeHtml(parsed.raw_query || "")} · 선택 전 MSDS의 CAS 번호를 비교하세요.</p>
+  </section>`;
+}
+
+function renderSubstanceSuggestions(items, parsed) {
+  return `<section class="candidate-section suggestion-section">
+    <div class="candidate-section-head"><span class="plan-label">유사 표현</span><h3>이 물질을 찾으셨나요?</h3><p>오타나 관용명으로 보이는 후보입니다. 자동 확정하지 않고 선택 후 상세정보를 보여줍니다.</p></div>
+    <div class="candidate-list">${items.map((item) => `<button class="candidate-card" type="button" data-substance-cas="${escapeHtml(item.cas_no || "")}">
+      <span class="candidate-index">?</span><span><strong>${escapeHtml(item.display_name)}</strong><small>${escapeHtml(item.matched_text || item.name_en || "")}</small></span>
+      <span class="candidate-cas">CAS ${escapeHtml(item.cas_no || "미기재")}</span><i>›</i>
+    </button>`).join("")}</div>
+    <p class="candidate-warning">입력한 표현: ${escapeHtml(parsed.lookup_text || parsed.raw_query || "")}</p>
+  </section>`;
+}
+
+function renderSubstanceDetail(item, parsed, data, index) {
+  const currentBadges = (item.current_designations || []).length
+    ? item.current_designations.map((status) => `<span class="chemical-badge ${escapeHtml(status.tone || "neutral")}">${escapeHtml(status.label)}</span>`).join("")
+    : `<span class="chemical-badge muted">현행 지정정보 미수록</span>`;
+  const noticeBadges = (item.notices || []).map((notice) => `<span class="chemical-badge ${escapeHtml(notice.tone || "notice")}">${escapeHtml(notice.status_label || "개정정보")}</span>`).join("");
+  const aliasCorrection = item.matched_by === "alias" && item.matched_text && item.matched_text !== item.display_name
+    ? `<p class="query-correction">입력 표현 <b>${escapeHtml(item.matched_text)}</b>을(를) ${escapeHtml(item.display_name)}로 연결했어요.</p>` : "";
+  const currentRows = (item.current_designations || []).map((status) => `<div class="regulation-row"><span>${escapeHtml(status.label)}</span><strong>${escapeHtml(status.value || "기재")}</strong></div>`).join("") || `<div class="regulation-empty"><strong>다운로드 자료에 현행 지정정보가 수록되지 않았습니다.</strong><p>다른 법령의 규제 대상이 아니거나 향후 지정되지 않는다는 뜻은 아닙니다.</p></div>`;
+  return `<article class="substance-detail-card" data-substance-detail="${index}">
+    <header class="substance-detail-head">
+      <div class="substance-title-group"><span class="substance-record-label">CHEMICAL PROFILE</span><h2>${escapeHtml(item.display_name)}</h2><p>${escapeHtml(item.name_en || "영문명 미기재")}</p>${aliasCorrection}</div>
+      <div class="substance-id-box"><span>CAS NUMBER</span><strong>${escapeHtml(item.cas_no || "미기재")}</strong><small>${item.existing_no ? `기존번호 ${escapeHtml(item.existing_no)}` : "기존번호 미기재"}</small></div>
+    </header>
+
+    <section class="query-read-card">
+      <span class="plan-label">FINDOL이 읽은 검색어</span>
+      <div class="query-read-grid"><div><small>인식 물질</small><strong>${escapeHtml(item.display_name)}</strong></div><div><small>입력 함량</small><strong>${escapeHtml(parsed.concentration_label || "미입력")}</strong></div><div><small>연결 방식</small><strong>${matchMethodLabel(item.matched_by)}</strong></div></div>
+    </section>
+
+    <section class="status-overview-card">
+      <div><span class="plan-label">STATUS OVERVIEW</span><h3>현재와 예정 상태</h3></div>
+      <div class="status-badge-line">${currentBadges}${noticeBadges}</div>
+      <p>${item.notices?.length ? "현재 다운로드 자료와 최신 행정예고 정보를 분리해 표시합니다." : "현재 다운로드 자료에 기록된 상태입니다. 별도 개정 이벤트가 연결되면 함께 표시됩니다."}</p>
+    </section>
+
+    <div class="substance-info-grid">
+      <section class="substance-info-section current-regulation-section">
+        <div class="subsection-heading"><span class="section-step">1</span><div><small>CURRENT DATA</small><h3>현재 자료상 분류</h3></div></div>
+        <div class="regulation-table">${currentRows}</div>
+        ${item.criteria_text ? `<div class="raw-criteria"><span>자료 원문</span><p>${escapeHtml(item.criteria_text)}</p></div>` : ""}
+      </section>
+      <section class="substance-info-section concentration-section">
+        <div class="subsection-heading"><span class="section-step">2</span><div><small>CONCENTRATION</small><h3>함량기준 단순 비교</h3></div></div>
+        ${renderConcentrationAnalysis(item.concentration_analysis, parsed)}
+      </section>
+    </div>
+
+    <section class="substance-info-section notice-section">
+      <div class="subsection-heading"><span class="section-step">3</span><div><small>REVISION WATCH</small><h3>행정예고·지정 예정정보</h3></div></div>
+      ${renderSubstanceNotices(item.notices || [], data.notice_meta)}
+    </section>
+
+    <div class="substance-bottom-grid">
+      <section class="substance-info-section practical-section">
+        <div class="subsection-heading"><span class="section-step">4</span><div><small>NEXT CHECK</small><h3>실무에서 이어서 확인</h3></div></div>
+        <div class="practical-check-list">${(item.practical_checks || []).map((check) => `<div class="practical-check"><span>✓</span><div><strong>${escapeHtml(check.title)}</strong><p>${escapeHtml(check.description)}</p></div></div>`).join("")}</div>
+        <button class="primary-outline-button" type="button" data-open-law-search="${escapeHtml(item.display_name)}">이 물질의 관련 법령 검색 →</button>
+      </section>
+      <section class="substance-info-section timeline-section">
+        <div class="subsection-heading"><span class="section-step">5</span><div><small>CHANGE HISTORY</small><h3>변경이력</h3></div></div>
+        <div class="chemical-timeline">${(item.timeline || []).map(renderChemicalTimelineItem).join("")}</div>
+        <div class="source-footnote"><strong>데이터 출처</strong><span>${escapeHtml(data.meta?.source_file || "업로드 자료")} · 기준일 ${escapeHtml(data.meta?.data_date || "확인 필요")}</span></div>
+      </section>
+    </div>
+  </article>`;
+}
+
+function matchMethodLabel(value) {
+  return ({ cas: "CAS 번호 일치", official_name: "공식명 일치", alias: "동의어·관용명 연결", partial_name: "일부 명칭 일치", similar_alias: "유사 표현 제안" })[value] || "자료 검색";
+}
+
+function renderConcentrationAnalysis(analysis = {}, parsed = {}) {
+  const comparisons = analysis.comparisons || [];
+  if (!parsed.concentration_label) {
+    const thresholds = (analysis.thresholds || []).map((item) => `<span>${escapeHtml(item.label)} <strong>${escapeHtml(item.threshold_label)}</strong></span>`).join("");
+    return `<div class="concentration-empty"><strong>함량이 입력되지 않았어요.</strong><p>${escapeHtml(analysis.summary || "물질명 뒤에 함량을 입력해 보세요.")}</p>${thresholds ? `<div class="threshold-chips">${thresholds}</div>` : ""}</div>`;
+  }
+  if (!comparisons.length) {
+    return `<div class="concentration-empty warning"><span class="input-concentration">입력 ${escapeHtml(parsed.concentration_label)}</span><strong>자동 비교할 숫자 기준이 없어요.</strong><p>${escapeHtml(analysis.summary || "고시 원문 확인이 필요합니다.")}</p></div>`;
+  }
+  return `<div class="comparison-summary state-${escapeHtml(analysis.state || "")}"><span>입력 함량 <b>${escapeHtml(parsed.concentration_label)}</b></span><strong>${escapeHtml(analysis.summary || "")}</strong></div>
+    <div class="comparison-list">${comparisons.map((item) => `<div class="comparison-row ${item.met ? "is-met" : "is-below"}"><div><span>${escapeHtml(item.label)}</span><small>자료 기준 ${escapeHtml(item.threshold_label)}</small></div><div class="calculation"><b>${escapeHtml(item.calculation)}</b><strong>${escapeHtml(item.result_label)}</strong></div></div>`).join("")}</div>
+    <p class="comparison-caution">숫자만 비교한 결과입니다. 적용 제외와 혼합물 조건을 원문에서 확인하세요.</p>`;
+}
+
+function renderSubstanceNotices(notices, noticeMeta = {}) {
+  if (!notices.length) {
+    return `<div class="regulation-empty"><strong>현재 연결된 행정예고·시행예정 이벤트가 없습니다.</strong><p>이는 최근 개정이 없다는 확정 판단이 아닙니다. 감시 대상 고시와 공식 원문을 추가 확인하세요.</p></div>`;
+  }
+  return `<div class="notice-card-list">${notices.map((notice) => `<article class="regulatory-notice-card ${escapeHtml(notice.tone || "notice")}">
+    <div class="notice-card-top"><span class="chemical-badge ${escapeHtml(notice.tone || "notice")}">${escapeHtml(notice.status_label || "개정정보")}</span><time>${escapeHtml(notice.published_date?.replaceAll("-", ".") || "날짜 확인")}</time></div>
+    <h4>${escapeHtml(notice.title)}</h4>
+    <dl><div><dt>공고번호</dt><dd>${escapeHtml(notice.notice_number || "확인 필요")}</dd></div><div><dt>예정 현황</dt><dd>${escapeHtml(notice.designation_summary || "세부 확인 필요")}</dd></div><div><dt>검증 상태</dt><dd>${escapeHtml(notice.verification_label || "검증 완료")}</dd></div></dl>
+    <p>${escapeHtml(notice.source_basis || "")}</p>
+    ${notice.source_url ? `<a href="${escapeHtml(notice.source_url)}" target="_blank" rel="noopener">공식 게시물 확인 ↗</a>` : ""}
+  </article>`).join("")}</div><p class="notice-global-warning">${escapeHtml(noticeMeta.notice || "행정예고는 확정 전 정보입니다.")}</p>`;
+}
+
+function renderChemicalTimelineItem(event) {
+  return `<div class="chemical-timeline-item tone-${escapeHtml(event.tone || "neutral")}"><span class="timeline-dot"></span><time>${escapeHtml(event.date?.replaceAll("-", ".") || "날짜 미정")}</time><div><strong>${escapeHtml(event.label || "변경정보")}</strong><p>${escapeHtml(event.description || "")}</p>${event.source_url ? `<a href="${escapeHtml(event.source_url)}" target="_blank" rel="noopener">원문 ↗</a>` : ""}</div></div>`;
+}
+
+function bindSubstanceResultActions() {
+  document.querySelectorAll("[data-substance-cas]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const concentration = (substanceSearchInput.value.match(/\d+(?:\.\d+)?\s*%/) || [""])[0];
+      const nextQuery = `${button.dataset.substanceCas} ${concentration}`.trim();
+      substanceSearchInput.value = nextQuery;
+      runSubstanceSearch(nextQuery);
+    });
+  });
+  document.querySelectorAll("[data-open-law-search]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const query = button.dataset.openLawSearch || substanceSearchInput.value;
+      activateTab("search");
+      searchInput.value = query;
+      searchForm.requestSubmit();
+    });
+  });
+}
+
 // -----------------------------------------------------------------------------
 // 초기화
 // -----------------------------------------------------------------------------
 initializeArchiveYears();
-renderShortcuts();
+renderRecommendedSearches();
+loadPopularSearches();
 $("favoriteCount").textContent = favorites.length;
 loadHomeDashboard();

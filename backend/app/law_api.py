@@ -9,11 +9,39 @@
 
 import os
 import httpx
-import xmltodict
+try:
+    import xmltodict
+except ModuleNotFoundError:  # Render installs it from requirements; this fallback keeps local tests portable.
+    xmltodict = None
+from xml.etree import ElementTree as ET
 from typing import Optional
 
 LAW_SEARCH_URL = "https://www.law.go.kr/DRF/lawSearch.do"
 LAW_SERVICE_URL = "https://www.law.go.kr/DRF/lawService.do"
+
+
+def _element_to_dict(element: ET.Element):
+    children = list(element)
+    if not children:
+        return (element.text or "").strip()
+    result = {}
+    for child in children:
+        value = _element_to_dict(child)
+        key = child.tag.split("}")[-1]
+        if key in result:
+            if not isinstance(result[key], list):
+                result[key] = [result[key]]
+            result[key].append(value)
+        else:
+            result[key] = value
+    return result
+
+
+def _parse_xml(text: str) -> dict:
+    if xmltodict is not None:
+        return xmltodict.parse(text)
+    root = ET.fromstring(text)
+    return {root.tag.split("}")[-1]: _element_to_dict(root)}
 
 
 class LawApiError(Exception):
@@ -50,7 +78,7 @@ async def search_law(query: str, display: int = 20, page: int = 1) -> dict:
         resp.raise_for_status()
 
     try:
-        data = xmltodict.parse(resp.text)
+        data = _parse_xml(resp.text)
     except Exception as e:
         raise LawApiError(f"응답 파싱 실패: {e}")
 
@@ -77,7 +105,7 @@ async def search_admrul(query: str, display: int = 20, page: int = 1) -> dict:
         resp.raise_for_status()
 
     try:
-        data = xmltodict.parse(resp.text)
+        data = _parse_xml(resp.text)
     except Exception as e:
         raise LawApiError(f"응답 파싱 실패: {e}")
 

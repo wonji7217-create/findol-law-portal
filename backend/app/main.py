@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 load_dotenv()
 
-from . import law_api, storage
+from . import law_api, storage, substance_service
 from .db import init_db, get_db, SessionLocal
 from .search_engine import (
     build_search_plan,
@@ -24,7 +24,7 @@ from .search_engine import (
 )
 
 
-app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="4.0.0")
+app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="5.5.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,7 +50,7 @@ def health(db: Session = Depends(get_db)):
     return {
         "status": "ok",
         "service": "findol 화학법령 검색·개정 아카이브",
-        "version": "4.0.0",
+        "version": "5.5.0",
         "archive_count": stats["total"],
     }
 
@@ -103,10 +103,11 @@ async def search(
     smart: bool = Query(True, description="검색어 사전·법령지도 확장 검색"),
     page: int = Query(1, ge=1),
     display: int = Query(20, ge=1, le=50),
+    x_findol_session: str | None = Header(None, alias="X-Findol-Session"),
     db: Session = Depends(get_db),
 ):
     """실무 표현을 시설·업무 주제로 분류하고 핵심 적용 규정을 우선 제시한다."""
-    plan = build_search_plan(q, max_terms=10)
+    plan = build_search_plan(q, max_terms=14)
 
     # 관리자 페이지에서 편집한 환경지식 주제를 정적 법령지도 위에 합친다.
     dynamic_topics = storage.dynamic_knowledge_matches(db, q, limit=3)
@@ -131,6 +132,15 @@ async def search(
         plan.checklist = list(dict.fromkeys(plan.checklist))[:7]
         if dynamic_topics[0].get("intent_summary"):
             plan.intent_summary = dynamic_topics[0]["intent_summary"]
+
+    # 실제 이용자가 검색한 표현을 개인정보 없이 집계한다.
+    storage.record_search_event(
+        db,
+        raw_query=q,
+        normalized_query=plan.normalized_query,
+        topic_label=plan.topics[0].get("label") if plan.topics else None,
+        session_id=x_findol_session,
+    )
 
     def unique_terms(values: list[str], limit: int) -> list[str]:
         seen: set[str] = set()
@@ -212,6 +222,49 @@ async def search(
         "api_warning": " / ".join(warnings) if warnings else None,
         "search_terms_used": {"law": law_terms, "admin_rule": admin_terms if include_admrul else []},
     }
+
+
+@app.get("/api/substances/meta")
+def substance_meta():
+    """업로드된 화학물질정보처리시스템 자료의 검색 범위와 기준일을 반환한다."""
+    return {
+        **substance_service.get_meta(),
+        "notice_verified_on": substance_service.get_notice_data().get("verified_on"),
+        "notice_warning": substance_service.get_notice_data().get("notice"),
+    }
+
+
+@app.get("/api/substances/search")
+def substance_search(
+    q: str = Query(..., min_length=1, description="물질명, CAS 번호 또는 함량 포함 표현"),
+    limit: int = Query(10, ge=1, le=30),
+):
+    """공식 다운로드 엑셀 기반 물질정보와 별도 개정·행정예고 이벤트를 함께 검색한다."""
+    try:
+        return substance_service.search_substances(q, limit=limit)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@app.get("/api/substances/{cas_no}")
+def substance_detail(
+    cas_no: str,
+    concentration: float | None = Query(None, ge=0, le=100),
+):
+    result = substance_service.get_substance_by_cas(cas_no, concentration=concentration)
+    if not result:
+        raise HTTPException(status_code=404, detail="해당 CAS 번호의 물질을 찾지 못했습니다.")
+    return result
+
+
+@app.get("/api/search/popular")
+def popular_searches(
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(6, ge=1, le=20),
+    db: Session = Depends(get_db),
+):
+    """findol 사이트 안에서 실제로 많이 검색된 표현을 익명 집계한다."""
+    return storage.get_popular_searches(db, days=days, limit=limit)
 
 
 @app.get("/api/archive/stats")

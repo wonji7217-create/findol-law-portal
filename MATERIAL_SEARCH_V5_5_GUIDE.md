@@ -1,1 +1,62 @@
-:root{--bg:#f7f7f4;--panel:#fff;--ink:#1f2933;--muted:#6b7280;--line:#e3e5e1;--green:#167c80;--green-soft:#eaf4f2;--danger:#b85151;--shadow:0 18px 50px rgba(47,62,56,.08)}*{box-sizing:border-box}body{margin:0;font-family:Pretendard Variable,Pretendard,sans-serif;background:var(--bg);color:var(--ink)}button,input,textarea,select{font:inherit}.admin-shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh}.sidebar{background:#173f42;color:#fff;padding:26px 18px;display:flex;flex-direction:column;gap:26px}.admin-brand{display:flex;gap:12px;align-items:center;color:#fff;text-decoration:none}.admin-brand>span,.login-mark{width:42px;height:42px;border-radius:16px;display:grid;place-items:center;background:#eef0ed;color:#0f5c5f;font-weight:900;font-size:24px}.admin-brand strong,.admin-brand small{display:block}.admin-brand small{opacity:.65;margin-top:2px}.sidebar nav{display:grid;gap:8px}.side-link{border:0;background:transparent;color:#dce5e1;padding:12px 14px;border-radius:12px;text-align:left;text-decoration:none;cursor:pointer}.side-link.active,.side-link:hover{background:rgba(255,255,255,.1)}.sidebar-note{margin-top:auto;font-size:13px;line-height:1.65;color:#aebbb6}.workspace{padding:34px;min-width:0}.topbar{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:24px}.eyebrow{margin:0 0 8px;color:var(--green);font-size:12px;font-weight:800;letter-spacing:.12em}.topbar h1{margin:0;font-size:32px}.topbar p:not(.eyebrow){margin:8px 0 0;color:var(--muted)}.top-actions{display:flex;gap:10px}.primary,.ghost,.danger,.mini{border-radius:11px;padding:10px 15px;border:1px solid var(--line);cursor:pointer}.primary{background:var(--green);color:#fff;border-color:var(--green)}.ghost,.mini{background:#fff;color:var(--ink)}.danger{background:#fff4f4;color:var(--danger);border-color:#e8caca}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}.stats article{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px 20px;box-shadow:var(--shadow)}.stats span{color:var(--muted);font-size:13px}.stats strong{display:block;font-size:28px;margin-top:5px}.manager-grid{display:grid;grid-template-columns:minmax(300px,.78fr) minmax(580px,1.6fr);gap:18px;align-items:start}.list-panel,.editor-panel{background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);overflow:hidden}.panel-head{padding:20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:15px;align-items:center}.panel-head h2,.section-title h3{margin:0}.panel-head p,.section-title p{margin:5px 0 0;color:var(--muted);font-size:13px}.panel-head input{max-width:190px}.topic-list{max-height:calc(100vh - 300px);overflow:auto;padding:10px}.topic-card{width:100%;border:0;border-radius:15px;padding:14px;text-align:left;background:transparent;cursor:pointer;display:grid;gap:5px}.topic-card:hover,.topic-card.active{background:var(--green-soft)}.topic-card strong{font-size:15px}.topic-card span{color:var(--muted);font-size:12px}.topic-card .topic-meta{display:flex;gap:8px;align-items:center}.badge{padding:3px 7px;border-radius:999px;background:#edf0ed;font-size:11px;color:#53605b}.badge.on{background:#dcece9;color:#0f5c5f}.editor-head{position:sticky;top:0;background:#fff;z-index:4}.switch{display:flex;align-items:center;gap:8px;font-size:13px}.switch input{display:none}.switch span{width:42px;height:24px;background:#ccd3cf;border-radius:999px;position:relative}.switch span:after{content:"";width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;left:3px;transition:.2s}.switch input:checked+span{background:var(--green)}.switch input:checked+span:after{left:21px}form#topicForm{padding:20px;display:grid;gap:16px}label{display:grid;gap:7px;font-weight:700;font-size:13px}label small{font-weight:400;color:var(--muted)}input,textarea,select{width:100%;border:1px solid var(--line);border-radius:11px;background:#fbfcfa;padding:10px 12px;color:var(--ink);outline:none}input:focus,textarea:focus,select:focus{border-color:#167c80;box-shadow:0 0 0 3px rgba(22,124,128,.12)}textarea{resize:vertical;line-height:1.55}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}.compact-row{grid-template-columns:170px 1fr}.form-section{border:1px solid var(--line);border-radius:16px;padding:15px}.section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.mini{padding:7px 10px;font-size:12px}.rule-list{display:grid;gap:8px}.rule-row{display:grid;grid-template-columns:135px 1.2fr 1fr 34px;gap:8px}.remove-rule{border:0;background:#f2f3f1;border-radius:9px;font-size:21px;cursor:pointer;color:#69736f}.form-actions{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;border-top:1px solid var(--line);padding-top:18px}.toast{position:fixed;right:24px;bottom:24px;background:#173f42;color:#fff;padding:13px 17px;border-radius:12px;opacity:0;transform:translateY(10px);pointer-events:none;transition:.2s}.toast.show{opacity:1;transform:none}dialog{border:0;border-radius:22px;padding:0;box-shadow:0 25px 80px rgba(21,31,27,.25)}dialog::backdrop{background:rgba(30,40,36,.55);backdrop-filter:blur(4px)}#loginForm{width:min(420px,90vw);padding:34px;display:grid;gap:14px;text-align:center}.login-mark{margin:auto}.error{color:var(--danger);font-size:13px;min-height:18px}code{background:#eef0ee;padding:2px 5px;border-radius:5px}@media(max-width:1050px){.admin-shell{grid-template-columns:1fr}.sidebar{display:none}.manager-grid{grid-template-columns:1fr}.topic-list{max-height:420px}.workspace{padding:22px}}@media(max-width:680px){.topbar{display:grid}.top-actions{width:100%}.top-actions button{flex:1}.stats{grid-template-columns:1fr}.two-col,.compact-row{grid-template-columns:1fr}.rule-row{grid-template-columns:1fr}.workspace{padding:14px}.panel-head{align-items:flex-start;flex-direction:column}.panel-head input{max-width:none}.form-actions{grid-template-columns:1fr 1fr}.form-actions div{display:none}}
+# findol v5.5 물질검색 적용 안내
+
+## 이번 버전에서 추가된 기능
+
+- 상단 메뉴에 **물질검색** 독립 탭 추가
+- 화학물질정보처리시스템 다운로드 자료 `화학물질_20260726.xlsx`를 검색용 SQLite DB로 변환
+- 총 47,520개 행 검색
+- 물질명, 영문명, CAS 번호, 일부 관용명·약칭·오타 검색
+- `인산 85%`, `차아염소산나트륨 12%`처럼 물질명과 함량을 함께 입력 가능
+- 현재 다운로드 자료상 지정현황과 별도 행정예고 이벤트를 구분 표시
+- 자료에 숫자로 적힌 혼합물 함량기준과 입력 함량 단순 비교
+- 실무 확인사항, 변경이력, 관련 법령검색 이동 버튼 제공
+
+## 인산 표시 방식
+
+현재 다운로드 엑셀에서 인산(CAS 7664-38-2)은 기존화학물질 정보만 확인되고 현행 유해성 지정정보는 수록되지 않습니다. 다만 2026년 6월 12일 게시된 화학물질안전원공고 제2026-62호 행정예고 이벤트를 별도로 연결해 다음처럼 표시합니다.
+
+- 현재: 다운로드 자료에 현행 지정정보 미수록
+- 예정정보: 행정예고
+- 검증 상태: 세부 지정번호·함량기준 검증 대기
+
+행정예고 첨부 별표의 해당 행을 구조화해 넣기 전에는 함량기준을 추정하지 않습니다.
+
+## 차아염소산나트륨 표시 방식
+
+업로드 엑셀에 기록된 내용을 그대로 사용합니다.
+
+- CAS 7681-52-9
+- 지정정보: 인체급성·생태 2026-1-1354
+- 인체급성유해성 10%
+- 생태유해성 2.5%
+
+`차아염소산나트륨 12%` 검색 시 12 ≥ 10, 12 ≥ 2.5를 각각 보여줍니다. 이는 숫자 단순 비교이며 최종 법적 판단이 아닙니다.
+
+## 데이터 업데이트 방법
+
+새 엑셀을 받았을 때 프로젝트 루트에서 다음 명령을 실행하면 검색 DB가 다시 생성됩니다.
+
+```bash
+python tools/build_substance_database.py 새파일.xlsx --data-date 2026-08-01
+```
+
+생성되는 파일:
+
+- `backend/app/data/substances.sqlite3`
+- `backend/app/data/substance_dataset_meta.json`
+
+## 행정예고·개정정보 관리
+
+현재 연결된 이벤트는 다음 파일에서 관리합니다.
+
+- `backend/app/data/regulatory_notices.json`
+
+현재 버전은 **물질 DB 검색과 예정정보 표시 구조까지 구현된 1차 적용본**입니다. 신규 게시물을 자동 감지하고 첨부 Excel/PDF의 물질 행까지 자동 반영하는 수집기는 아직 운영 연결 전입니다. 자동 수집 결과는 관리자 검토 후 공개하는 방식으로 후속 구현하는 것이 안전합니다.
+
+## 배포 후 시험 검색
+
+1. `인산 85%`
+2. `차아염소산나트륨 12%`
+3. `차야염소산나트륨`
+4. `7681-52-9`
+5. `톨루엔 90%`

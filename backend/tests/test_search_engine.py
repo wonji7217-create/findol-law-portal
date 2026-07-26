@@ -48,3 +48,17 @@ class SearchEngineTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_sodium_hypochlorite_typo_maps_to_substance_notice():
+    plan = build_search_plan("차야염소산나트륨")
+    assert plan.normalized_query == "차아염소산나트륨"
+    assert plan.substances[0]["cas_no"] == "7681-52-9"
+    assert any("지정고시" in item["title"] for item in plan.primary_rules)
+
+
+def test_phosphoric_acid_concentration_is_preserved():
+    plan = build_search_plan("인산 85%")
+    assert plan.substances[0]["name"] == "인산"
+    assert plan.substances[0]["input_concentration"] == "85%"
+    assert any(item["title"] == "산업안전보건기준에 관한 규칙" for item in plan.primary_rules)

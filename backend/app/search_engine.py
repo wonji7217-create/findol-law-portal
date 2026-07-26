@@ -25,6 +25,7 @@ from typing import Any
 DATA_DIR = Path(__file__).resolve().parent / "data"
 LAW_MAP_PATH = DATA_DIR / "law_map.json"
 SEARCH_DICTIONARY_PATH = DATA_DIR / "search_dictionary.csv"
+SUBSTANCE_MAP_PATH = DATA_DIR / "substance_map.json"
 
 
 def _compact(text: str | None) -> str:
@@ -62,6 +63,43 @@ def load_search_dictionary() -> list[dict]:
 
 
 @lru_cache(maxsize=1)
+def load_substance_map() -> dict:
+    try:
+        return json.loads(SUBSTANCE_MAP_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"물질지도 파일을 읽지 못했습니다: {exc}") from exc
+
+
+def match_substances(query: str) -> list[dict]:
+    """물질명·영문명·CAS 번호를 찾아 구조화된 물질정보를 반환한다."""
+    compact_query = _compact(query)
+    concentration_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|퍼센트|프로)", query, re.IGNORECASE)
+    input_concentration = f"{concentration_match.group(1)}%" if concentration_match else None
+    matches: list[dict] = []
+    for substance in load_substance_map().get("substances", []):
+        matched_terms: list[str] = []
+        score = 0
+        for alias in substance.get("aliases", []):
+            compact_alias = _compact(alias)
+            if not compact_alias or compact_alias not in compact_query:
+                continue
+            matched_terms.append(alias)
+            score += 80 + min(len(compact_alias) * 8, 100)
+            if compact_query == compact_alias:
+                score += 150
+        if not score:
+            continue
+        matches.append({
+            **substance,
+            "score": score,
+            "matched_terms": _unique(matched_terms),
+            "input_concentration": input_concentration,
+        })
+    matches.sort(key=lambda item: item.get("score", 0), reverse=True)
+    return matches[:3]
+
+
+@lru_cache(maxsize=1)
 def _topic_index() -> dict[str, dict]:
     return {topic["id"]: topic for topic in load_law_map().get("topics", [])}
 
@@ -81,6 +119,9 @@ class SearchPlan:
     upper_laws: list[dict] = field(default_factory=list)
     related_rules: list[dict] = field(default_factory=list)
     matched_dictionary: list[dict] = field(default_factory=list)
+    substances: list[dict] = field(default_factory=list)
+    substance_verified_on: str | None = None
+    substance_notice: str | None = None
     map_verified_on: str | None = None
     map_notice: str | None = None
 
@@ -239,8 +280,9 @@ def _build_checklist(topics: list[dict]) -> list[str]:
     return _unique(items)[:7]
 
 
-def build_search_plan(query: str, max_terms: int = 10) -> SearchPlan:
+def build_search_plan(query: str, max_terms: int = 14) -> SearchPlan:
     normalized, correction, dictionary_rows = normalize_query(query)
+    substances = match_substances(normalized)
     topics = _topic_matches(normalized, dictionary_rows)
     ambiguities = detect_ambiguities(normalized, topics)
     intent, intent_summary = _build_intent(topics)
@@ -257,6 +299,43 @@ def build_search_plan(query: str, max_terms: int = 10) -> SearchPlan:
     for topic_match in topics:
         topic = _topic_index().get(topic_match.get("id"), {})
         terms.extend(topic.get("search_terms", [])[:6])
+
+    primary_rules = _collect_topic_rules(topics, "primary_rules")
+    upper_laws = _collect_topic_rules(topics, "upper_laws")
+    related_rules = _collect_topic_rules(topics, "related_rules")
+    checklist = _build_checklist(topics)
+
+    # 물질명이 감지되면 CAS 번호와 물질별 지정·표시·함량 기준을 우선 연결한다.
+    if substances:
+        top = substances[0]
+        substance_label = f"{top.get('name')} ({top.get('cas_no')})" if top.get("cas_no") else top.get("name")
+        intent = f"화학물질 정보 · {top.get('name')}"
+        intent_summary = top.get("summary") or f"{substance_label}의 법적 분류와 관련 규정 확인"
+        terms.extend(top.get("search_terms", []))
+        checklist = _unique((top.get("questions") or []) + checklist)[:8]
+
+        for substance in substances:
+            topic_label = f"물질정보 · {substance.get('name')}"
+            if not any(item.get("id") == f"substance:{substance.get('id')}" for item in topics):
+                topics.insert(0, {
+                    "id": f"substance:{substance.get('id')}",
+                    "label": topic_label,
+                    "score": substance.get("score", 0),
+                    "matched_terms": substance.get("matched_terms", []),
+                    "intent_summary": substance.get("summary"),
+                    "source": "substance_map",
+                })
+            for field_name, target in (("primary_rules", primary_rules), ("upper_laws", upper_laws), ("related_rules", related_rules)):
+                for rule in substance.get(field_name, []):
+                    target.append({
+                        **rule,
+                        "topic_id": f"substance:{substance.get('id')}",
+                        "topic_label": topic_label,
+                    })
+
+        primary_rules = _unique(primary_rules, key=lambda item: (item.get("kind"), _compact(item.get("title"))))
+        upper_laws = _unique(upper_laws, key=lambda item: (item.get("kind"), _compact(item.get("title"))))
+        related_rules = _unique(related_rules, key=lambda item: (item.get("kind"), _compact(item.get("title"))))
 
     # 자주 입력하는 결합 표현을 표준 업무어로 보정한다.
     if "설치" in normalized and "검사" in normalized:
@@ -277,6 +356,7 @@ def build_search_plan(query: str, max_terms: int = 10) -> SearchPlan:
     terms.extend(tokens)
 
     law_map = load_law_map()
+    substance_map = load_substance_map()
     return SearchPlan(
         original_query=query,
         normalized_query=normalized,
@@ -285,12 +365,15 @@ def build_search_plan(query: str, max_terms: int = 10) -> SearchPlan:
         intent_summary=intent_summary,
         correction=correction,
         topics=topics,
-        checklist=_build_checklist(topics),
+        checklist=checklist,
         ambiguities=ambiguities,
-        primary_rules=_collect_topic_rules(topics, "primary_rules"),
-        upper_laws=_collect_topic_rules(topics, "upper_laws"),
-        related_rules=_collect_topic_rules(topics, "related_rules"),
+        primary_rules=primary_rules,
+        upper_laws=upper_laws,
+        related_rules=related_rules,
         matched_dictionary=dictionary_rows[:12],
+        substances=substances,
+        substance_verified_on=substance_map.get("verified_on"),
+        substance_notice=substance_map.get("notice"),
         map_verified_on=law_map.get("verified_on"),
         map_notice=law_map.get("notice"),
     )
@@ -475,6 +558,9 @@ def public_plan(plan: SearchPlan) -> dict:
         "checklist": plan.checklist,
         "ambiguities": plan.ambiguities,
         "expanded_terms": plan.expanded_terms,
+        "substances": plan.substances,
+        "substance_verified_on": plan.substance_verified_on,
+        "substance_notice": plan.substance_notice,
         "map_verified_on": plan.map_verified_on,
         "map_notice": plan.map_notice,
     }

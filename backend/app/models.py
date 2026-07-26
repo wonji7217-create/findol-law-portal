@@ -108,3 +108,20 @@ class KnowledgeTopic(Base):
     priority = Column(Integer, default=50)
     created_at = Column(DateTime, default=now_kst_naive)
     updated_at = Column(DateTime, default=now_kst_naive, onupdate=now_kst_naive)
+
+
+class SearchEvent(Base):
+    """사이트 내부 검색 통계.
+
+    개인정보를 저장하지 않고, 브라우저가 생성한 임시 세션값은 해시로만 보관한다.
+    같은 세션에서 같은 검색어를 짧은 시간 안에 반복한 경우는 중복 집계하지 않는다.
+    """
+
+    __tablename__ = "search_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    raw_query = Column(String, index=True, nullable=False)
+    normalized_query = Column(String, index=True, nullable=False)
+    topic_label = Column(String, index=True)
+    session_key = Column(String, index=True)
+    searched_at = Column(DateTime, default=now_kst_naive, index=True)

@@ -1,195 +1,148 @@
-from __future__ import annotations
+# 검색어 사전과 법령지도 수정 안내
 
-import argparse
-import json
-import re
-import sqlite3
-import zipfile
-from pathlib import Path
-from xml.etree import ElementTree as ET
+findol v3 검색은 두 파일을 중심으로 작동합니다.
 
-parser = argparse.ArgumentParser(description='화학물질정보처리시스템 엑셀을 findol 검색 DB로 변환합니다.')
-parser.add_argument('xlsx', type=Path, help='다운로드한 .xlsx 파일')
-parser.add_argument('--out-dir', type=Path, default=Path(__file__).resolve().parents[1] / 'backend' / 'app' / 'data')
-parser.add_argument('--data-date', default=None, help='YYYY-MM-DD, 생략 시 파일명 숫자에서 추출')
-args = parser.parse_args()
-XLSX = args.xlsx.resolve()
-OUT_DIR = args.out_dir.resolve()
-OUT_DIR.mkdir(parents=True, exist_ok=True)
-DB_PATH = OUT_DIR / 'substances.sqlite3'
-META_PATH = OUT_DIR / 'substance_dataset_meta.json'
+```text
+검색어 사전
+backend/app/data/search_dictionary.csv
 
-NS = {'a': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
-CELL_RE = re.compile(r'([A-Z]+)(\d+)')
+법령지도
+backend/app/data/law_map.json
+```
 
+## 1. 검색어 사전 CSV
 
-def col_to_index(ref: str) -> int:
-    m = CELL_RE.match(ref)
-    letters = m.group(1) if m else ref
-    idx = 0
-    for ch in letters:
-        idx = idx * 26 + ord(ch) - 64
-    return idx - 1
+열 구성:
 
+| 열 | 의미 |
+|---|---|
+| `user_expression` | 사용자가 입력할 표현 |
+| `standard_expression` | 내부에서 사용할 표준 표현 |
+| `topic` | 연결할 시설·업무 주제 |
+| `handling` | 처리 방식 |
+| `notes` | 관리 메모 |
 
-def normalize(value: str | None) -> str:
-    value = (value or '').strip().lower()
-    value = re.sub(r'[\s\-_/·ㆍ,().]+', '', value)
-    return value
+### handling 값
 
+```text
+auto_correct
+오타·약어를 표준 표현으로 실제 치환
 
-def read_shared_strings(z: zipfile.ZipFile) -> list[str]:
-    values: list[str] = []
-    with z.open('xl/sharedStrings.xml') as fh:
-        for event, elem in ET.iterparse(fh, events=('end',)):
-            if elem.tag.endswith('}si'):
-                parts = [node.text or '' for node in elem.iter() if node.tag.endswith('}t')]
-                values.append(''.join(parts))
-                elem.clear()
-    return values
+auto_expand
+원문은 유지하고 관련 주제·검색어 확장에 사용
 
+choose
+뜻이 여러 개여서 자동 확정하지 않고 선택질문 표시
+```
 
-def iter_rows():
-    with zipfile.ZipFile(XLSX) as z:
-        shared = read_shared_strings(z)
-        with z.open('xl/worksheets/sheet1.xml') as fh:
-            for event, elem in ET.iterparse(fh, events=('end',)):
-                if not elem.tag.endswith('}row'):
-                    continue
-                row: dict[int, str] = {}
-                for c in elem:
-                    if not c.tag.endswith('}c'):
-                        continue
-                    ref = c.attrib.get('r', '')
-                    idx = col_to_index(ref)
-                    cell_type = c.attrib.get('t')
-                    value = ''
-                    if cell_type == 'inlineStr':
-                        parts = [node.text or '' for node in c.iter() if node.tag.endswith('}t')]
-                        value = ''.join(parts)
-                    else:
-                        v = next((node for node in c if node.tag.endswith('}v')), None)
-                        if v is not None and v.text is not None:
-                            if cell_type == 's':
-                                try:
-                                    value = shared[int(v.text)]
-                                except (ValueError, IndexError):
-                                    value = v.text
-                            else:
-                                value = v.text
-                    row[idx] = value.strip()
-                yield row
-                elem.clear()
+예시:
 
+```csv
+희선탱크,희석탱크,제조·사용시설,auto_correct,오타 교정
+저장탱크,저장시설,저장시설,auto_expand,시설 유형 연결
+탱크,탱크,시설분류,choose,용도 선택 필요
+```
 
-headers = []
-records = []
-for n, row in enumerate(iter_rows()):
-    if n == 0:
-        max_col = max(row) if row else -1
-        headers = [row.get(i, '') for i in range(max_col + 1)]
-        continue
-    if not row:
-        continue
-    vals = [row.get(i, '') for i in range(13)]
-    if not any(vals[1:4]):
-        continue
-    records.append(vals)
+### CSV 수정 시 주의
 
-if DB_PATH.exists():
-    DB_PATH.unlink()
-conn = sqlite3.connect(DB_PATH)
-conn.executescript('''
-PRAGMA journal_mode=OFF;
-PRAGMA synchronous=OFF;
-CREATE TABLE substances (
-  id INTEGER PRIMARY KEY,
-  source_no TEXT,
-  cas_no TEXT,
-  name_en TEXT,
-  name_ko TEXT,
-  existing_no TEXT,
-  hazard_designation TEXT,
-  accident_preparedness TEXT,
-  restricted_prohibited_authorized TEXT,
-  priority_substance TEXT,
-  persistent_pollutant TEXT,
-  criteria_text TEXT,
-  registered_existing TEXT,
-  is_existing TEXT,
-  normalized_cas TEXT,
-  normalized_en TEXT,
-  normalized_ko TEXT
-);
-CREATE TABLE aliases (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  substance_id INTEGER NOT NULL,
-  alias_text TEXT NOT NULL,
-  alias_norm TEXT NOT NULL,
-  alias_type TEXT NOT NULL DEFAULT 'manual',
-  UNIQUE(substance_id, alias_norm),
-  FOREIGN KEY(substance_id) REFERENCES substances(id)
-);
-CREATE INDEX idx_substances_cas ON substances(normalized_cas);
-CREATE INDEX idx_substances_ko ON substances(normalized_ko);
-CREATE INDEX idx_substances_en ON substances(normalized_en);
-CREATE INDEX idx_alias_norm ON aliases(alias_norm);
-''')
+- 첫 행의 열 이름을 변경하지 않습니다.
+- Excel 저장 시 CSV UTF-8 형식을 사용합니다.
+- 같은 표현을 `auto_correct`와 `choose`에 동시에 넣지 않는 편이 안전합니다.
+- 법적 의미가 다른 `저장시설`과 `보관시설`을 같은 표준어로 합치지 않습니다.
 
-insert = '''INSERT INTO substances (
-source_no,cas_no,name_en,name_ko,existing_no,hazard_designation,accident_preparedness,
-restricted_prohibited_authorized,priority_substance,persistent_pollutant,criteria_text,
-registered_existing,is_existing,normalized_cas,normalized_en,normalized_ko
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'''
+## 2. 법령지도 JSON
 
-for vals in records:
-    no, cas, en, ko, existing, hazard, accident, restricted, priority, persistent, criteria, registered, is_existing = vals
-    conn.execute(insert, (
-        no, cas, en, ko, existing, hazard, accident, restricted, priority, persistent,
-        criteria, registered, is_existing, normalize(cas), normalize(en), normalize(ko)
-    ))
-conn.commit()
+각 주제에는 다음 정보가 들어 있습니다.
 
-# Add aliases by exact CAS. User-friendly aliases are deliberately small and transparent.
-alias_map = {
-    '7664-38-2': [
-        ('인산', 'common_ko'), ('오르토인산', 'common_ko'), ('정인산', 'common_ko'),
-        ('phosphoric acid', 'common_en'), ('orthophosphoric acid', 'official_en'), ('H3PO4', 'formula'),
-    ],
-    '7681-52-9': [
-        ('차아염소산나트륨', 'normalized_ko'), ('차아염소산 나트륨', 'official_ko'),
-        ('차아염소산소다', 'common_ko'), ('차염', 'abbreviation'), ('sodium hypochlorite', 'official_en'),
-        ('NaOCl', 'formula'), ('차야염소산나트륨', 'common_typo'),
-    ],
-    '68-12-2': [('DMF', 'abbreviation'), ('디메틸포름아미드', 'common_ko'), ('디메틸포름아마이드', 'common_ko')],
-    '78-93-3': [('MEK', 'abbreviation'), ('메틸에틸케톤', 'common_ko'), ('2-부타논', 'common_ko')],
-    '7664-39-3': [('불산', 'common_ko'), ('플루오르화수소', 'common_ko'), ('hydrofluoric acid', 'common_en')],
+```json
+{
+  "id": "storage",
+  "label": "저장시설",
+  "triggers": ["저장시설", "저장탱크", "저장조"],
+  "search_terms": ["저장시설", "방유제", "액위계"],
+  "intent_summary": "고정식 저장시설의 설치·관리기준과 검사·변경절차 확인",
+  "checklist": ["용기가 아닌 고정식 탱크인지"],
+  "primary_rules": [],
+  "upper_laws": [],
+  "related_rules": []
 }
-for cas, aliases in alias_map.items():
-    ids = [r[0] for r in conn.execute('SELECT id FROM substances WHERE normalized_cas=?', (normalize(cas),))]
-    for substance_id in ids:
-        for text, kind in aliases:
-            conn.execute('INSERT OR IGNORE INTO aliases(substance_id, alias_text, alias_norm, alias_type) VALUES (?,?,?,?)',
-                         (substance_id, text, normalize(text), kind))
-conn.commit()
+```
 
-counts = {
-    'row_count': conn.execute('SELECT COUNT(*) FROM substances').fetchone()[0],
-    'cas_count': conn.execute("SELECT COUNT(*) FROM substances WHERE TRIM(cas_no) <> ''").fetchone()[0],
-    'name_en_count': conn.execute("SELECT COUNT(*) FROM substances WHERE TRIM(name_en) <> ''").fetchone()[0],
-    'name_ko_count': conn.execute("SELECT COUNT(*) FROM substances WHERE TRIM(name_ko) <> ''").fetchone()[0],
-    'alias_count': conn.execute('SELECT COUNT(*) FROM aliases').fetchone()[0],
+### 규정 역할
+
+```text
+primary_rules
+검색 결과의 '핵심 적용 규정'에 표시
+
+upper_laws
+'상위 법령'에 표시
+
+related_rules
+'함께 확인할 규정'에 표시
+```
+
+규정 항목 예시:
+
+```json
+{
+  "title": "유해화학물질 제조·사용·저장시설 설치 및 관리에 관한 고시",
+  "role": "핵심 적용 고시",
+  "kind": "admin_rule",
+  "department": "화학물질안전원",
+  "official_url": "공식 원문 주소"
 }
-meta = {
-    'dataset_name': '화학물질정보처리시스템 다운로드 자료',
-    'source_file': XLSX.name,
-    'data_date': args.data_date or (lambda m: f'{m.group(1)[:4]}-{m.group(1)[4:6]}-{m.group(1)[6:8]}' if m else '확인 필요')(re.search(r'(20\d{6})', XLSX.stem)),
-    'generated_on': __import__('datetime').date.today().isoformat(),
-    'headers': headers,
-    **counts,
-    'notice': '검색 결과 없음은 비규제 물질을 의미하지 않습니다. 최신 고시·행정예고와 원문을 함께 확인해야 합니다.',
+```
+
+### 새 주제를 추가하는 순서
+
+1. `law_map.json`의 `topics` 배열에 새 주제를 추가합니다.
+2. 대표 표현을 `triggers`에 넣습니다.
+3. 법제처 API에서 사용할 표현을 `search_terms`에 넣습니다.
+4. 핵심 적용 규정을 `primary_rules`에 넣습니다.
+5. `search_dictionary.csv`에도 사용자 표현을 추가합니다.
+6. 테스트 파일에 최소 한 건을 추가합니다.
+7. 로컬에서 테스트 후 GitHub에 push합니다.
+
+## 3. 모호어 선택지
+
+`law_map.json`의 `ambiguities`에서 관리합니다.
+
+```json
+{
+  "term": "탱크",
+  "message": "사용 목적에 따라 적용 고시가 달라집니다.",
+  "options": [
+    {"label": "공정에서 사용하는 탱크", "query": "제조·사용시설 탱크"},
+    {"label": "고정식 저장탱크", "query": "저장시설 저장탱크"}
+  ]
 }
-META_PATH.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
-conn.close()
-print(json.dumps(meta, ensure_ascii=False, indent=2))
-print('DB bytes', DB_PATH.stat().st_size)
+```
+
+## 4. 법령지도 갱신일
+
+`law_map.json` 상단의 값을 갱신합니다.
+
+```json
+"verified_on": "2026-07-25"
+```
+
+실제로 현행 규정과 공식 원문 주소를 확인한 날만 변경합니다.
+
+## 5. 수정 후 테스트
+
+```powershell
+cd backend
+py -m unittest discover -s tests -v
+```
+
+그다음 사이트를 실행하고 아래 검색어를 직접 확인합니다.
+
+```text
+저장시설
+보관시설
+희석탱크 설치검사
+탱크
+탱크로리
+사외배관 누출
+원료 변경 시 신고
+```

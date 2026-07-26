@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 import hashlib
 import json
@@ -22,6 +22,116 @@ def _now_local() -> datetime:
 
 def _today_yyyymmdd() -> str:
     return datetime.now(KST).strftime("%Y%m%d")
+
+
+def _clean_search_query(value: str | None) -> str:
+    value = re.sub(r"\s+", " ", (value or "").strip())
+    return value[:120]
+
+
+def record_search_event(
+    db: Session,
+    *,
+    raw_query: str,
+    normalized_query: str,
+    topic_label: str | None = None,
+    session_id: str | None = None,
+    dedupe_minutes: int = 10,
+) -> bool:
+    """내부 검색어를 익명 집계한다.
+
+    IP·이메일·계정은 저장하지 않는다. 브라우저 세션값은 SHA-256 해시 일부만
+    저장하며, 같은 세션/검색어가 짧은 시간에 반복되면 한 번으로 집계한다.
+    """
+    raw = _clean_search_query(raw_query)
+    normalized = _clean_search_query(normalized_query) or raw
+    if not normalized:
+        return False
+
+    session_key = None
+    if session_id:
+        session_key = hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:32]
+        cutoff = _now_local() - timedelta(minutes=max(1, dedupe_minutes))
+        duplicate = (
+            db.query(models.SearchEvent)
+            .filter(
+                models.SearchEvent.session_key == session_key,
+                models.SearchEvent.normalized_query == normalized,
+                models.SearchEvent.searched_at >= cutoff,
+            )
+            .first()
+        )
+        if duplicate:
+            return False
+
+    db.add(models.SearchEvent(
+        raw_query=raw,
+        normalized_query=normalized,
+        topic_label=_clean_search_query(topic_label) if topic_label else None,
+        session_key=session_key,
+        searched_at=_now_local(),
+    ))
+    db.commit()
+    return True
+
+
+def get_popular_searches(db: Session, *, days: int = 30, limit: int = 6) -> dict:
+    """최근 사이트 내부 검색어 순위를 반환한다.
+
+    동일 브라우저의 짧은 시간 내 반복 검색은 저장 단계에서 제거된다.
+    정렬은 검색 횟수 우선, 동률이면 가장 최근 검색 순이다.
+    """
+    days = max(1, min(int(days), 365))
+    limit = max(1, min(int(limit), 20))
+    cutoff = _now_local() - timedelta(days=days)
+    events = (
+        db.query(models.SearchEvent)
+        .filter(models.SearchEvent.searched_at >= cutoff)
+        .order_by(models.SearchEvent.searched_at.desc())
+        .all()
+    )
+
+    grouped: dict[str, dict] = {}
+    for event in events:
+        key = _clean_search_query(event.normalized_query)
+        if not key:
+            continue
+        item = grouped.setdefault(key, {
+            "query": key,
+            "count": 0,
+            "topic_label": event.topic_label,
+            "last_searched_at": event.searched_at,
+            "sessions": set(),
+        })
+        item["count"] += 1
+        if event.session_key:
+            item["sessions"].add(event.session_key)
+        if event.searched_at and event.searched_at > item["last_searched_at"]:
+            item["last_searched_at"] = event.searched_at
+            if event.topic_label:
+                item["topic_label"] = event.topic_label
+
+    ranked = sorted(
+        grouped.values(),
+        key=lambda item: (item["count"], item["last_searched_at"]),
+        reverse=True,
+    )[:limit]
+
+    return {
+        "period_days": days,
+        "total_events": len(events),
+        "items": [
+            {
+                "rank": index + 1,
+                "query": item["query"],
+                "count": item["count"],
+                "unique_sessions": len(item["sessions"]),
+                "topic_label": item["topic_label"],
+                "last_searched_at": item["last_searched_at"].isoformat() if item["last_searched_at"] else None,
+            }
+            for index, item in enumerate(ranked)
+        ],
+    }
 
 
 def normalize_date(value: str | None) -> str | None:
