@@ -1,0 +1,14 @@
+findol v5.6 업로드 파일
+
+GitHub에서 압축을 풀지 않은 ZIP 자체를 올리지 마세요.
+압축을 푼 뒤 backend와 frontend 폴더를 기존 프로젝트에 덮어씁니다.
+
+주요 변경 파일
+- backend/app/substance_service.py
+- backend/app/main.py
+- frontend/index.html
+- frontend/script.js
+- frontend/style.css
+
+배포 후 Render가 Live가 되면 Ctrl + F5로 새로고침합니다.
+시험 검색: 차아염소산나트륨 12%

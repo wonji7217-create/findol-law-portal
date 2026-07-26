@@ -24,7 +24,7 @@ from .search_engine import (
 )
 
 
-app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="5.5.0")
+app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="5.6.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,7 +50,7 @@ def health(db: Session = Depends(get_db)):
     return {
         "status": "ok",
         "service": "findol 화학법령 검색·개정 아카이브",
-        "version": "5.5.0",
+        "version": "5.6.0",
         "archive_count": stats["total"],
     }
 

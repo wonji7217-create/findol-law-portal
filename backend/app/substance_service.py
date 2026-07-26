@@ -221,61 +221,176 @@ def _fuzzy_alias_search(conn: sqlite3.Connection, lookup_norm: str, limit: int) 
     return result
 
 
+
+CRITERIA_CATEGORY_META = {
+    "인체급성유해성": {"key": "human_acute", "group": "유독물질"},
+    "인체만성유해성": {"key": "human_chronic", "group": "유독물질"},
+    "생태유해성": {"key": "ecotoxicity", "group": "유독물질"},
+    "사고대비물질": {"key": "accident_preparedness", "group": "사고대비물질"},
+    "제한물질": {"key": "restricted", "group": "제한물질"},
+    "금지물질": {"key": "prohibited", "group": "금지물질"},
+    "허가물질": {"key": "authorized", "group": "허가물질"},
+    "중점관리물질": {"key": "priority", "group": "중점관리물질"},
+    "잔류성오염물질": {"key": "persistent", "group": "잔류성오염물질"},
+    "혼합물 함량기준": {"key": "mixture", "group": "기타"},
+}
+
+
+def _threshold_label(value: float, comparator: str, *, include_operator: bool = False) -> str:
+    base = f"{value:g}%"
+    if not include_operator:
+        return base
+    return f"{base} {'초과' if comparator == 'gt' else '이상'}"
+
+
+def _criterion_item(
+    label: str,
+    value: str | float,
+    *,
+    comparator: str = "gte",
+    source_fragment: str | None = None,
+) -> dict[str, Any]:
+    numeric = float(value)
+    meta = CRITERIA_CATEGORY_META.get(label, CRITERIA_CATEGORY_META["혼합물 함량기준"])
+    return {
+        "key": meta["key"],
+        "label": label,
+        "designation_group": meta["group"],
+        "threshold": numeric,
+        "comparator": comparator,
+        "threshold_label": _threshold_label(numeric, comparator),
+        "rule_label": _threshold_label(numeric, comparator, include_operator=True),
+        "source_fragment": source_fragment,
+    }
+
+
 def parse_criteria(criteria_text: str | None) -> list[dict[str, Any]]:
-    text = (criteria_text or "").strip()
+    """함량기준 원문을 분류별 숫자 기준으로 구조화한다.
+
+    유독물질의 인체급성·인체만성·생태유해성 기준뿐 아니라
+    사고대비물질, 제한물질, 금지물질, 허가물질 등의
+    ``몇 % 이상/초과 함유`` 문구도 해당 분류명과 함께 보존한다.
+    """
+    text = re.sub(r"\s+", " ", (criteria_text or "").strip())
     if not text:
         return []
-    pairs = re.findall(r"([^,:;]+?)\s*:\s*(\d+(?:\.\d+)?)\s*%", text)
+
     result: list[dict[str, Any]] = []
-    seen: set[tuple[str, float]] = set()
-    for label, value in pairs:
-        label = re.sub(r"\s+", " ", label).strip(" ,-:")
-        # If the captured label includes a previous designation prefix, retain the last meaningful segment.
-        if "유독물질" in label and label != "유독물질":
-            label = label.split("유독물질")[-1].strip(" :-") or label
+    seen: set[tuple[str, float, str]] = set()
+
+    def add(label: str, value: str | float, comparator: str = "gte", source: str | None = None) -> None:
         numeric = float(value)
-        key = (label, numeric)
+        key = (label, numeric, comparator)
         if key in seen:
-            continue
+            return
         seen.add(key)
-        result.append({"label": label or "함량기준", "threshold": numeric, "threshold_label": f"{numeric:g}%"})
-    # Some rows express the rule as prose, e.g. “이를 85% 이상 함유한 혼합물”.
-    for match in re.finditer(r"(\d+(?:\.\d+)?)\s*%\s*이상", text):
-        numeric = float(match.group(1))
-        key = ("혼합물 함량기준", numeric)
-        if key not in seen:
-            seen.add(key)
-            result.append({"label": "혼합물 함량기준", "threshold": numeric, "threshold_label": f"{numeric:g}%"})
+        result.append(_criterion_item(label, numeric, comparator=comparator, source_fragment=source))
+
+    # 자료는 보통 "/"로 규제 분류가 구분된다. 분류별 문맥을 보존하기 위해 먼저 나눈다.
+    segments = [segment.strip() for segment in re.split(r"\s*/\s*", text) if segment.strip()]
+    if not segments:
+        segments = [text]
+
+    for segment in segments:
+        before_count = len(result)
+
+        # 유독물질 세부 분류는 "인체급성유해성 : 10%"처럼 숫자 뒤에
+        # '이상' 문구가 생략되는 경우가 많다.
+        for match in re.finditer(
+            r"(인체급성유해성|인체만성유해성|생태유해성)\s*:\s*(\d+(?:\.\d+)?)\s*%",
+            segment,
+        ):
+            add(match.group(1), match.group(2), "gte", segment)
+
+        # 그 밖의 지정 분류는 "이를 25% 이상 함유한 혼합물"과 같은 문장으로 적힌다.
+        section_label = next(
+            (
+                label
+                for label in (
+                    "사고대비물질",
+                    "제한물질",
+                    "금지물질",
+                    "허가물질",
+                    "중점관리물질",
+                    "잔류성오염물질",
+                )
+                if label in segment
+            ),
+            None,
+        )
+        if section_label:
+            for match in re.finditer(r"(\d+(?:\.\d+)?)\s*%\s*(이상|초과)", segment):
+                comparator = "gt" if match.group(2) == "초과" else "gte"
+                add(section_label, match.group(1), comparator, segment)
+
+        # 분류명이 없는 예외 문구도 숫자 기준 자체는 보존하되,
+        # 결과 화면에서는 '혼합물 함량기준'으로 명확히 구분한다.
+        if len(result) == before_count:
+            for match in re.finditer(r"(\d+(?:\.\d+)?)\s*%\s*(이상|초과)", segment):
+                comparator = "gt" if match.group(2) == "초과" else "gte"
+                add("혼합물 함량기준", match.group(1), comparator, segment)
+
     return result
 
 
 def compare_concentration(criteria_text: str | None, concentration: float | None) -> dict[str, Any]:
     thresholds = parse_criteria(criteria_text)
-    comparisons = []
+    comparisons: list[dict[str, Any]] = []
+
     if concentration is not None:
         for item in thresholds:
-            met = concentration >= item["threshold"]
+            comparator = item.get("comparator", "gte")
+            met = concentration > item["threshold"] if comparator == "gt" else concentration >= item["threshold"]
+            operator = ">" if comparator == "gt" else "≥"
             comparisons.append({
                 **item,
                 "input": concentration,
                 "input_label": f"{concentration:g}%",
                 "met": met,
-                "result_label": "기준 이상" if met else "기준 미만",
-                "calculation": f"{concentration:g} ≥ {item['threshold']:g}" if met else f"{concentration:g} < {item['threshold']:g}",
+                "result_label": "기준 초과" if met and comparator == "gt" else ("기준 이상" if met else ("기준 이하" if comparator == "gt" else "기준 미만")),
+                "calculation": f"{concentration:g} {operator} {item['threshold']:g}" if met else (
+                    f"{concentration:g} ≤ {item['threshold']:g}" if comparator == "gt"
+                    else f"{concentration:g} < {item['threshold']:g}"
+                ),
             })
+
+    matched_statuses: list[dict[str, Any]] = []
+    seen_matched: set[str] = set()
+    for item in comparisons:
+        if not item["met"] or item["key"] in seen_matched:
+            continue
+        seen_matched.add(item["key"])
+        matched_statuses.append({
+            "key": item["key"],
+            "label": item["label"],
+            "designation_group": item["designation_group"],
+            "threshold": item["threshold"],
+            "threshold_label": item["threshold_label"],
+            "rule_label": item["rule_label"],
+            "status_label": f"{item['label']} 함량기준 이상",
+        })
+
     if concentration is None:
         summary = "함량을 함께 입력하면 자료의 숫자 기준과 단순 비교할 수 있습니다."
         state = "not_requested"
     elif not thresholds:
         summary = "현재 다운로드 자료에 자동 비교 가능한 숫자 함량기준이 없습니다."
         state = "no_threshold"
-    elif any(item["met"] for item in comparisons):
-        summary = "입력 농도가 하나 이상의 자료상 함량기준 이상입니다."
+    elif matched_statuses:
+        labels = "·".join(item["label"] for item in matched_statuses)
+        summary = f"입력 농도는 {labels}의 자료상 함량기준 이상입니다."
         state = "threshold_met"
     else:
-        summary = "입력 농도는 표시된 숫자 함량기준보다 낮습니다. 적용 제외·다른 기준은 원문 확인이 필요합니다."
+        summary = "입력 농도는 자동 비교 가능한 모든 숫자 함량기준보다 낮습니다. 적용 제외·다른 기준은 원문 확인이 필요합니다."
         state = "below_threshold"
-    return {"state": state, "summary": summary, "thresholds": thresholds, "comparisons": comparisons}
+
+    return {
+        "state": state,
+        "summary": summary,
+        "thresholds": thresholds,
+        "comparisons": comparisons,
+        "matched_statuses": matched_statuses,
+    }
 
 
 def practical_checks(item: dict[str, Any]) -> list[dict[str, str]]:

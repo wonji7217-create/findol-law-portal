@@ -34,3 +34,20 @@ def test_common_typo_alias():
 def test_cas_exact_search():
     item = first("7681-52-9")
     assert item["matched_by"] == "cas"
+
+
+def test_matched_status_labels_are_summarized():
+    item = first("차아염소산나트륨 12%")
+    labels = {x["label"] for x in item["concentration_analysis"]["matched_statuses"]}
+    assert labels == {"인체급성유해성", "생태유해성"}
+
+
+def test_accident_and_restricted_categories_are_preserved():
+    accident = first("벤질 클로라이드 30%")
+    accident_labels = {x["label"] for x in accident["concentration_analysis"]["matched_statuses"]}
+    assert {"인체급성유해성", "인체만성유해성", "사고대비물질"} <= accident_labels
+
+    restricted = first("크로뮴산화물 1%")
+    restricted_labels = {x["label"] for x in restricted["concentration_analysis"]["matched_statuses"]}
+    assert {"인체만성유해성", "제한물질"} <= restricted_labels
+    assert "인체급성유해성" not in restricted_labels

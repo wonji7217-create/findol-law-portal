@@ -2022,7 +2022,7 @@ main { max-width: var(--content); padding: 28px 28px 88px; }
 }
 
 /* ============================================================
-   findol v5.5 — 독립 물질검색
+   findol v5.6 — 물질 함량기준 분류 요약
    ============================================================ */
 .substance-page-hero {
   padding: 34px 38px;
@@ -2280,4 +2280,184 @@ main { max-width: var(--content); padding: 28px 28px 88px; }
   .candidate-cas { grid-column: 2; }
   .candidate-card i { grid-column: 3; grid-row: 1 / 3; }
   .chemical-timeline-item { grid-template-columns: 68px minmax(0,1fr); }
+}
+
+
+/* --------------------------------------------------------------------------
+   v5.6 물질 함량기준 요약
+   숫자 비교 결과를 분류명 배지로 먼저 보여주고 상세 계산은 아래에 유지한다.
+   -------------------------------------------------------------------------- */
+.comparison-summary {
+  padding: 15px 16px;
+  border: 1px solid #DCE9E3;
+}
+.comparison-summary.state-threshold_met {
+  background: linear-gradient(135deg, #EFF8F4 0%, #F8FBF9 100%);
+  border-color: #C9E2D7;
+}
+.comparison-summary.state-below_threshold {
+  background: #F7F8F7;
+  border-color: #E4E8E5;
+}
+.comparison-summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.comparison-summary-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #61716A;
+  font-size: 10px;
+}
+.comparison-summary-head > span b {
+  color: #173E35;
+  font-size: 12px;
+}
+.comparison-summary-head > strong {
+  margin: 0;
+  color: #173E35;
+  font-size: 12px;
+  text-align: right;
+}
+.comparison-summary > p {
+  margin: 11px 0 0;
+  color: #62716B;
+  font-size: 9.7px;
+  line-height: 1.55;
+}
+.matched-status-block {
+  margin-top: 13px;
+  padding: 12px;
+  background: rgba(255,255,255,.82);
+  border: 1px solid rgba(203,224,215,.95);
+  border-radius: 10px;
+}
+.matched-status-block.is-empty {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border-color: #E3E7E4;
+}
+.matched-status-block.is-empty > strong {
+  color: #68736E;
+  font-size: 10.5px;
+}
+.matched-status-title {
+  display: block !important;
+  margin-bottom: 8px;
+  color: #5E6D67 !important;
+  font-size: 9px !important;
+  font-weight: 720;
+  letter-spacing: .01em;
+}
+.matched-status-block.is-empty .matched-status-title {
+  margin-bottom: 0;
+}
+.matched-status-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.matched-status-chip {
+  display: inline-flex !important;
+  align-items: center;
+  min-height: 28px;
+  padding: 6px 10px;
+  color: #0E5A4C !important;
+  background: #E2F3EC;
+  border: 1px solid #BFDCCE;
+  border-radius: 999px;
+  font-size: 10px !important;
+  font-weight: 780;
+  line-height: 1.2;
+}
+.matched-status-chip.status-accident_preparedness {
+  color: #7A5317 !important;
+  background: #FFF3D9;
+  border-color: #EAD29C;
+}
+.matched-status-chip.status-restricted,
+.matched-status-chip.status-prohibited,
+.matched-status-chip.status-authorized {
+  color: #8A3F3B !important;
+  background: #FCEAE7;
+  border-color: #ECC7C1;
+}
+.matched-status-chip.status-priority,
+.matched-status-chip.status-persistent {
+  color: #5C4A7A !important;
+  background: #F1ECF8;
+  border-color: #D7CBE8;
+}
+.matched-status-chip.status-mixture {
+  color: #55615C !important;
+  background: #F1F3F2;
+  border-color: #D9DEDB;
+}
+.comparison-detail-title {
+  margin: 13px 1px 7px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.comparison-detail-title span {
+  color: #2E3D37;
+  font-size: 10.5px;
+  font-weight: 780;
+}
+.comparison-detail-title small {
+  color: #8A938E;
+  font-size: 8.7px;
+}
+.comparison-row.is-met > div:first-child span::after {
+  content: " 기준 이상";
+  margin-left: 5px;
+  color: #167C68;
+  font-size: 8px;
+  font-weight: 700;
+}
+.comparison-caution {
+  padding-left: 15px;
+  position: relative;
+}
+.comparison-caution::before {
+  content: "!";
+  position: absolute;
+  left: 1px;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  display: grid;
+  place-items: center;
+  color: #7D6A38;
+  background: #F4E8C7;
+  border-radius: 50%;
+  font-size: 7px;
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .comparison-summary-head {
+    display: block;
+  }
+  .comparison-summary-head > strong {
+    display: block;
+    margin-top: 5px;
+    text-align: left;
+  }
+  .matched-status-chip {
+    min-height: 26px;
+    padding: 5px 9px;
+    font-size: 9.5px !important;
+  }
+  .comparison-detail-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
 }

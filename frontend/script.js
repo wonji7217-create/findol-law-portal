@@ -870,17 +870,44 @@ function matchMethodLabel(value) {
 
 function renderConcentrationAnalysis(analysis = {}, parsed = {}) {
   const comparisons = analysis.comparisons || [];
+  const matchedStatuses = (analysis.matched_statuses || comparisons.filter((item) => item.met).map((item) => ({
+    key: item.key || "mixture",
+    label: item.label || "혼합물 함량기준",
+    threshold_label: item.threshold_label || "",
+  }))).filter((item, index, list) => list.findIndex((candidate) => candidate.key === item.key) === index);
+
   if (!parsed.concentration_label) {
-    const thresholds = (analysis.thresholds || []).map((item) => `<span>${escapeHtml(item.label)} <strong>${escapeHtml(item.threshold_label)}</strong></span>`).join("");
+    const thresholds = (analysis.thresholds || []).map((item) => `<span>${escapeHtml(item.label)} <strong>${escapeHtml(item.rule_label || item.threshold_label)}</strong></span>`).join("");
     return `<div class="concentration-empty"><strong>함량이 입력되지 않았어요.</strong><p>${escapeHtml(analysis.summary || "물질명 뒤에 함량을 입력해 보세요.")}</p>${thresholds ? `<div class="threshold-chips">${thresholds}</div>` : ""}</div>`;
   }
+
   if (!comparisons.length) {
     return `<div class="concentration-empty warning"><span class="input-concentration">입력 ${escapeHtml(parsed.concentration_label)}</span><strong>자동 비교할 숫자 기준이 없어요.</strong><p>${escapeHtml(analysis.summary || "고시 원문 확인이 필요합니다.")}</p></div>`;
   }
-  return `<div class="comparison-summary state-${escapeHtml(analysis.state || "")}"><span>입력 함량 <b>${escapeHtml(parsed.concentration_label)}</b></span><strong>${escapeHtml(analysis.summary || "")}</strong></div>
-    <div class="comparison-list">${comparisons.map((item) => `<div class="comparison-row ${item.met ? "is-met" : "is-below"}"><div><span>${escapeHtml(item.label)}</span><small>자료 기준 ${escapeHtml(item.threshold_label)}</small></div><div class="calculation"><b>${escapeHtml(item.calculation)}</b><strong>${escapeHtml(item.result_label)}</strong></div></div>`).join("")}</div>
-    <p class="comparison-caution">숫자만 비교한 결과입니다. 적용 제외와 혼합물 조건을 원문에서 확인하세요.</p>`;
+
+  const statusBlock = matchedStatuses.length
+    ? `<div class="matched-status-block">
+        <span class="matched-status-title">자료상 함량기준 이상 항목</span>
+        <div class="matched-status-chips">${matchedStatuses.map((item) => `<span class="matched-status-chip status-${escapeHtml(item.key || "mixture")}">${escapeHtml(item.label)}</span>`).join("")}</div>
+      </div>`
+    : `<div class="matched-status-block is-empty">
+        <span class="matched-status-title">자료상 함량기준 이상 항목</span>
+        <strong>해당 항목 없음</strong>
+      </div>`;
+
+  return `<div class="comparison-summary state-${escapeHtml(analysis.state || "")}">
+      <div class="comparison-summary-head">
+        <span>입력 함량 <b>${escapeHtml(parsed.concentration_label)}</b></span>
+        <strong>${matchedStatuses.length ? `${matchedStatuses.length}개 분류 기준 이상` : "모든 자동 비교 기준 미만"}</strong>
+      </div>
+      ${statusBlock}
+      <p>${escapeHtml(analysis.summary || "")}</p>
+    </div>
+    <div class="comparison-detail-title"><span>비교 근거</span><small>다운로드 자료에 기재된 숫자 기준</small></div>
+    <div class="comparison-list">${comparisons.map((item) => `<div class="comparison-row ${item.met ? "is-met" : "is-below"}"><div><span>${escapeHtml(item.label)}</span><small>자료 기준 ${escapeHtml(item.rule_label || item.threshold_label)}</small></div><div class="calculation"><b>${escapeHtml(item.calculation)}</b><strong>${escapeHtml(item.result_label)}</strong></div></div>`).join("")}</div>
+    <p class="comparison-caution">위 표시는 입력 함량과 자료의 숫자 기준만 비교한 결과입니다. 최종 해당 여부는 혼합물 구성, 적용 제외 문구, 용도 및 최신 고시 원문을 함께 확인해야 합니다.</p>`;
 }
+
 
 function renderSubstanceNotices(notices, noticeMeta = {}) {
   if (!notices.length) {
