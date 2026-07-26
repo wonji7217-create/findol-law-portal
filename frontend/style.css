@@ -1832,3 +1832,99 @@ main { max-width: var(--content); padding: 28px 28px 88px; }
     max-height: 225px !important;
   }
 }
+
+
+/* v5.3 유관기관 바로가기 + 지방환경청 선택 팝업 */
+.institution-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  overflow: hidden;
+  background: #fff;
+}
+.institution-item {
+  min-width: 0;
+  min-height: 96px;
+  padding: 14px 13px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: #253039;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.institution-item:nth-child(3n) { border-right: 0; }
+.institution-item:nth-child(n+4) { border-bottom: 0; }
+.institution-item:hover,
+.institution-item:focus-visible { background: #F7FAF8; outline: none; }
+.institution-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: #0F5C5F;
+  background: #EFF4F1;
+  border: 1px solid #DDE5E1;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 850;
+}
+.institution-item strong { display: block; color: #253039; font-size: 12.5px; line-height: 1.35; }
+.institution-item small { display: block; margin-top: 4px; color: #7A838A; font-size: 9.5px; line-height: 1.4; }
+.institution-item i { color: #65716F; font-size: 14px; font-style: normal; }
+
+.institution-modal-card { width: min(700px, 100%); }
+.institution-modal-header { padding-right: 48px; }
+.institution-modal-header h2 { margin: 7px 0 8px; color: #17212A; font-size: 26px; letter-spacing: -.035em; }
+.institution-modal-header p { margin: 0; color: #68736E; font-size: 12px; line-height: 1.65; }
+.regional-office-grid {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.regional-office-link {
+  min-width: 0;
+  padding: 15px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #26313A;
+  background: #FAFBFA;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  text-decoration: none;
+}
+.regional-office-link:hover,
+.regional-office-link:focus-visible { color: #0F5C5F; background: #F1F7F4; border-color: #C8DAD2; outline: none; }
+.regional-office-link strong { display: block; font-size: 13px; line-height: 1.35; }
+.regional-office-link small { display: block; margin-top: 4px; color: #78817D; font-size: 10px; }
+.regional-office-link i { flex: 0 0 auto; font-style: normal; }
+.institution-modal-note { margin: 16px 2px 0; color: #7B8580; font-size: 10px; line-height: 1.6; }
+
+@media (max-width: 760px) {
+  .institution-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .institution-item:nth-child(3n) { border-right: 1px solid var(--border); }
+  .institution-item:nth-child(2n) { border-right: 0; }
+  .institution-item:nth-child(n+4) { border-bottom: 1px solid var(--border); }
+  .institution-item:nth-child(n+5) { border-bottom: 0; }
+  .regional-office-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 430px) {
+  .institution-grid { grid-template-columns: 1fr; }
+  .institution-item,
+  .institution-item:nth-child(2n),
+  .institution-item:nth-child(3n),
+  .institution-item:nth-child(n+5) { border-right: 0; border-bottom: 1px solid var(--border); }
+  .institution-item:last-child { border-bottom: 0; }
+  .institution-item { min-height: 78px; }
+}

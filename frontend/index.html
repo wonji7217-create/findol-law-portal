@@ -8,7 +8,7 @@
 <meta content="화관법 법령 검색, 개정 아카이브, 시행일 캘린더를 제공하는 findol" name="description"/>
 <title>findol | 환경·화학·안전 규정 실무검색</title>
 <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" rel="stylesheet"/>
-<link href="style.css?v=5.2" rel="stylesheet"/>
+<link href="style.css?v=5.3" rel="stylesheet"/>
 </head>
 <body>
 <header class="site-header">
@@ -192,15 +192,17 @@
 <div class="workspace-card-head"><div><span class="kicker">FREQUENT LAWS</span><h2>자주 찾는 법령</h2></div><button class="text-link" data-search-focus="" type="button">검색하기 →</button></div>
 <div class="frequent-laws"><div class="law-shortcuts" id="lawShortcuts"></div></div>
 </article>
-<article class="workspace-card tools-workspace-card">
-<div class="workspace-card-head"><div><span class="kicker">WORK TOOLS</span><h2>실무 바로가기</h2></div></div>
-<div aria-label="주요 기능" class="tool-strip">
-<button class="tool-item" data-query="영업허가 변경신고" type="button"><span class="tool-icon">↻</span><span><strong>변경신고</strong><small>허가·신고 검토 시작</small></span></button>
-<button class="tool-item" data-query="소량취급시설" type="button"><span class="tool-icon">⌁</span><span><strong>소량기준</strong><small>시설·물질 기준 확인</small></span></button>
-<button class="tool-item" data-query="화학사고예방관리계획서" type="button"><span class="tool-icon">▤</span><span><strong>화관서</strong><small>작성·검토 기준 찾기</small></span></button>
-<button class="tool-item" id="officialLawButton" type="button"><span class="tool-icon">↗</span><span><strong>공식 원문</strong><small>국가법령정보센터 열기</small></span></button>
+<article class="workspace-card institutions-workspace-card">
+<div class="workspace-card-head"><div><span class="kicker">RELATED INSTITUTIONS</span><h2>유관기관 바로가기</h2></div></div>
+<div aria-label="유관기관 사이트" class="institution-grid">
+<a class="institution-item" href="https://www.moleg.go.kr/" target="_blank" rel="noopener noreferrer"><span class="institution-icon" aria-hidden="true">법</span><span><strong>법제처</strong><small>법제·법령해석 정보</small></span><i aria-hidden="true">↗</i></a>
+<a class="institution-item" href="https://opinion.lawmaking.go.kr/" target="_blank" rel="noopener noreferrer"><span class="institution-icon" aria-hidden="true">입</span><span><strong>국민참여입법센터</strong><small>입법예고·의견 제출</small></span><i aria-hidden="true">↗</i></a>
+<a class="institution-item" href="https://www.mcee.go.kr/" target="_blank" rel="noopener noreferrer"><span class="institution-icon" aria-hidden="true">환</span><span><strong>기후에너지환경부</strong><small>정책·고시·보도자료</small></span><i aria-hidden="true">↗</i></a>
+<button class="institution-item" id="regionalOfficeButton" type="button" aria-haspopup="dialog" aria-controls="institutionModal"><span class="institution-icon" aria-hidden="true">청</span><span><strong>지방환경청</strong><small>지역별 관할 환경청 선택</small></span><i aria-hidden="true">＋</i></button>
+<a class="institution-item" href="https://nics.me.go.kr/main.do" target="_blank" rel="noopener noreferrer"><span class="institution-icon" aria-hidden="true">화</span><span><strong>화학물질안전원</strong><small>화관법·기술자료</small></span><i aria-hidden="true">↗</i></a>
+<a class="institution-item" href="https://portal.kosha.or.kr/" target="_blank" rel="noopener noreferrer"><span class="institution-icon" aria-hidden="true">안</span><span><strong>안전보건포털</strong><small>산업안전·사업 신청</small></span><i aria-hidden="true">↗</i></a>
 </div>
-<div class="workspace-tip"><span>✦ TIP</span> 실무 표현으로 검색한 뒤, 핵심 규정의 공식 원문을 마지막에 확인하세요.</div>
+<div class="workspace-tip"><span>✦ TIP</span> 지방환경청은 버튼을 누르면 지역별 기관 선택창이 열립니다.</div>
 </article>
 </div>
 </section>
@@ -256,6 +258,27 @@
 </section>
 </main>
 <footer class="site-footer"><div class="footer-inner"><div><div class="footer-brand"><span class="brand-stone footer-stone">f</span>findol</div><div class="footer-note">환경·화학·안전 실무자가 필요한 규정을 빠르게 찾도록 돕는 개인 프로젝트입니다. 실제 적용 전 최신 공식 원문과 관계기관을 확인하세요.</div></div><div class="footer-links"><span>www.findol.me.kr</span><a href="https://www.law.go.kr" rel="noreferrer" target="_blank">국가법령정보센터 ↗</a></div></div></footer>
+<div class="modal-backdrop" hidden id="institutionModal">
+<article aria-labelledby="institutionModalTitle" aria-modal="true" class="archive-modal-card institution-modal-card" role="dialog">
+<button aria-label="닫기" class="modal-close" id="institutionModalClose" type="button">×</button>
+<header class="institution-modal-header">
+<span class="kicker">REGIONAL OFFICES</span>
+<h2 id="institutionModalTitle">지방환경청 선택</h2>
+<p>담당 지역의 환경청을 선택하면 공식 홈페이지가 새 탭에서 열립니다.</p>
+</header>
+<div class="regional-office-grid">
+<a class="regional-office-link" href="https://www.me.go.kr/hg/web/main.do" target="_blank" rel="noopener noreferrer"><span><strong>한강유역환경청</strong><small>서울·인천·경기 권역</small></span><i>↗</i></a>
+<a class="regional-office-link" href="https://www.me.go.kr/ndg" target="_blank" rel="noopener noreferrer"><span><strong>낙동강유역환경청</strong><small>부산·울산·경남 권역</small></span><i>↗</i></a>
+<a class="regional-office-link" href="https://www.me.go.kr/gg/" target="_blank" rel="noopener noreferrer"><span><strong>금강유역환경청</strong><small>대전·세종·충청 권역</small></span><i>↗</i></a>
+<a class="regional-office-link" href="https://www.me.go.kr/ysg" target="_blank" rel="noopener noreferrer"><span><strong>영산강유역환경청</strong><small>광주·전남·제주 권역</small></span><i>↗</i></a>
+<a class="regional-office-link" href="https://www.me.go.kr/wonju" target="_blank" rel="noopener noreferrer"><span><strong>원주지방환경청</strong><small>강원·충북 일부 권역</small></span><i>↗</i></a>
+<a class="regional-office-link" href="https://www.me.go.kr/daegu/" target="_blank" rel="noopener noreferrer"><span><strong>대구지방환경청</strong><small>대구·경북 권역</small></span><i>↗</i></a>
+<a class="regional-office-link" href="https://www.me.go.kr/smg" target="_blank" rel="noopener noreferrer"><span><strong>전북지방환경청</strong><small>전북 권역</small></span><i>↗</i></a>
+<a class="regional-office-link" href="https://www.me.go.kr/mamo/web/main.do" target="_blank" rel="noopener noreferrer"><span><strong>수도권대기환경청</strong><small>수도권 대기환경 업무</small></span><i>↗</i></a>
+</div>
+<p class="institution-modal-note">기관의 세부 관할구역과 담당 업무는 각 기관 공식 홈페이지에서 확인하세요.</p>
+</article>
+</div>
 <div class="modal-backdrop" hidden="" id="archiveModal">
 <article aria-labelledby="archiveModalTitle" aria-modal="true" class="archive-modal-card" role="dialog">
 <button aria-label="닫기" class="modal-close" id="archiveModalClose" type="button">×</button>
@@ -263,6 +286,6 @@
 </article>
 </div>
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
-<script src="script.js?v=5.2"></script>
+<script src="script.js?v=5.3"></script>
 </body>
 </html>

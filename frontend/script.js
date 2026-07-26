@@ -89,7 +89,41 @@ $("mobileMenuButton").addEventListener("click", () => {
   const open = $("mobileNav").classList.toggle("is-open");
   $("mobileMenuButton").setAttribute("aria-expanded", String(open));
 });
-$("officialLawButton").addEventListener("click", () => window.open("https://www.law.go.kr", "_blank", "noopener"));
+const officialLawButton = $("officialLawButton");
+if (officialLawButton) officialLawButton.addEventListener("click", () => window.open("https://www.law.go.kr", "_blank", "noopener"));
+
+
+// -----------------------------------------------------------------------------
+// 유관기관 · 지방환경청 선택 팝업
+// -----------------------------------------------------------------------------
+let institutionModalReturnFocus = null;
+
+function openInstitutionModal() {
+  institutionModalReturnFocus = document.activeElement;
+  $("institutionModal").hidden = false;
+  document.body.classList.add("modal-open");
+  $("regionalOfficeButton").setAttribute("aria-expanded", "true");
+  requestAnimationFrame(() => $("institutionModalClose").focus());
+}
+
+function closeInstitutionModal() {
+  $("institutionModal").hidden = true;
+  document.body.classList.remove("modal-open");
+  $("regionalOfficeButton").setAttribute("aria-expanded", "false");
+  if (institutionModalReturnFocus && typeof institutionModalReturnFocus.focus === "function") {
+    institutionModalReturnFocus.focus();
+  }
+}
+
+$("regionalOfficeButton").setAttribute("aria-expanded", "false");
+$("regionalOfficeButton").addEventListener("click", openInstitutionModal);
+$("institutionModalClose").addEventListener("click", closeInstitutionModal);
+$("institutionModal").addEventListener("click", (event) => {
+  if (event.target === $("institutionModal")) closeInstitutionModal();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !$("institutionModal").hidden) closeInstitutionModal();
+});
 
 // -----------------------------------------------------------------------------
 // 즐겨찾기
