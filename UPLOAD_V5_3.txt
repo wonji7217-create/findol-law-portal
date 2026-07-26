@@ -1,11 +1,36 @@
-findol v5.3 적용 방법
+# findol v5 디자인 적용 안내
 
-1. 압축을 풉니다.
-2. GitHub 저장소 첫 화면에서 Add file → Upload files를 누릅니다.
-3. 압축 안의 backend와 frontend 폴더를 저장소 최상위에 드래그합니다.
-4. 업로드 목록의 경로가 backend/app/main.py, frontend/index.html처럼 시작하는지 확인합니다.
-5. Commit changes를 누릅니다.
-6. Render가 자동 재배포되어 Live가 될 때까지 기다립니다.
-7. 사이트에서 Ctrl+F5로 강력 새로고침합니다.
+## 적용된 방향
 
-주의: (배포용)backend 같은 새 폴더를 만들지 말고, 기존 backend와 frontend에 덮어써야 합니다.
+- 폰트: Pretendard Variable
+- 배경: `#F7F7F4`
+- 카드: `#FFFFFF`
+- 제목: `#111827`
+- 본문: `#1F2933`
+- 보조 글자: `#6B7280`
+- 메인 틸: `#167C80`
+- 진한 틸: `#0F5C5F`
+- 포인트 라임: `#C9D96B`
+- 테두리: `#E3E5E1`
+
+## 주요 변경
+
+- PC 화면의 글자 크기와 명도 대비 강화
+- 김돌 캐릭터를 메인 검색 영역에 유지
+- 검색창을 첫 화면의 중심 요소로 확대
+- 주요 기능을 4개 카드로 정리
+- 최근 개정·시행일, 자주 찾는 법령, 실무 바로가기를 명확한 패널로 분리
+- 모바일 검색창 줄바꿈 오류 방지
+- 상단 `관리자` 버튼에서 `/admin.html`로 바로 이동
+- 관리자 페이지도 동일한 틸·스톤 팔레트로 통일
+
+## GitHub 웹에서 적용하는 가장 쉬운 방법
+
+1. `findol_v5_frontend_apply.zip`의 압축을 풉니다.
+2. GitHub 저장소 첫 화면에서 `Add file` → `Upload files`를 누릅니다.
+3. 압축을 푼 뒤 보이는 **frontend 폴더 전체**를 업로드 영역에 끌어 놓습니다.
+4. 업로드 목록의 경로가 `frontend/index.html`, `frontend/style.css`처럼 표시되는지 확인합니다.
+5. `Commit changes`를 누릅니다.
+6. Render에서 자동 배포가 끝나고 `Live`가 되면 사이트를 새로고침합니다.
+
+폴더명이 `(배포용)frontend`처럼 바뀌면 안 됩니다. 압축 안의 폴더 이름은 정확히 `frontend`입니다.

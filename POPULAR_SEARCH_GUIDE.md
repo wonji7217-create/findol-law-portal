@@ -1,26 +1,66 @@
-# findol v5.3 — 실제 검색 통계 기반 인기 검색어
+const $ = (s) => document.querySelector(s);
+let token = sessionStorage.getItem('findol_admin_token') || '';
+let topics = [];
 
-## 기존 화면의 기준
-기존의 `자주 찾는 법령` 6개 항목은 실제 사용자 검색 통계가 아니라, 법령지도에서 대표 시설·업무 주제를 수동으로 선정한 바로가기였습니다.
+const api = async (path, options={}) => {
+  const headers = {'Content-Type':'application/json','X-Admin-Token':token,...(options.headers||{})};
+  const res = await fetch(path,{...options,headers});
+  if (res.status === 401) { sessionStorage.removeItem('findol_admin_token'); token=''; $('#loginDialog').showModal(); throw new Error('관리자 토큰이 올바르지 않습니다.'); }
+  const data = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error(data.detail || '요청에 실패했습니다.');
+  return data;
+};
+const lines = (v) => (v||'').split('\n').map(x=>x.trim()).filter(Boolean);
+const joinLines = (v) => (v||[]).join('\n');
+const toast = (msg) => { const el=$('#toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),1800); };
 
-또한 작은 아이콘은 별도 아이콘 파일이 아니라 유니코드 기호(⚗, ▣, ▤ 등)를 사용해서 Windows·브라우저·글꼴 환경에 따라 깨져 보일 수 있었습니다.
+function ruleRow(rule={}) {
+  const node = $('#ruleTemplate').content.firstElementChild.cloneNode(true);
+  node.querySelector('.rule-kind').value = rule.kind || 'admin_rule';
+  node.querySelector('.rule-title').value = rule.title || '';
+  node.querySelector('.rule-url').value = rule.official_url || '';
+  node.querySelector('.remove-rule').onclick = () => node.remove();
+  return node;
+}
+function setRules(id, items=[]) { const el=$(id); el.innerHTML=''; items.forEach(x=>el.append(ruleRow(x))); }
+function getRules(id) { return [...$(id).querySelectorAll('.rule-row')].map(row=>({kind:row.querySelector('.rule-kind').value,title:row.querySelector('.rule-title').value.trim(),official_url:row.querySelector('.rule-url').value.trim()||null})).filter(x=>x.title); }
 
-## v5.3 변경사항
-- 섹션명을 `많이 찾은 검색어`로 변경
-- 최근 30일 findol 내부 검색어를 실제 횟수 순으로 표시
-- 같은 브라우저가 같은 검색어를 10분 안에 반복한 경우 중복 제외
-- IP, 이메일, 계정 정보는 저장하지 않음
-- 브라우저 임시 세션값은 해시값으로만 저장
-- 검색 기록이 없을 때만 `추천 검색어`를 표시하며 실제 인기 검색어인 것처럼 보이지 않게 구분
-- 깨지기 쉬운 유니코드 아이콘을 제거하고 숫자 순위 배지로 교체
+function resetForm() {
+  $('#topicForm').reset(); $('#topicId').value=''; $('#priorityInput').value=50; $('#activeInput').checked=true;
+  setRules('#primaryRules'); setRules('#upperLaws'); setRules('#relatedRules');
+  $('#editorTitle').textContent='새 지식 주제'; $('#editorSubtitle').textContent='검색과 법령 연결에 필요한 내용을 입력하세요.'; $('#deleteBtn').hidden=true;
+  document.querySelectorAll('.topic-card').forEach(x=>x.classList.remove('active'));
+}
+function fillForm(item) {
+  $('#topicId').value=item.id; $('#topicKey').value=item.topic_key; $('#labelInput').value=item.label;
+  $('#descriptionInput').value=item.description||''; $('#intentInput').value=item.intent_summary||'';
+  $('#triggersInput').value=joinLines(item.triggers); $('#searchTermsInput').value=joinLines(item.search_terms);
+  $('#checklistInput').value=joinLines(item.checklist); $('#tasksInput').value=joinLines(item.related_tasks);
+  $('#notesInput').value=item.notes||''; $('#priorityInput').value=item.priority||50; $('#activeInput').checked=!!item.is_active;
+  setRules('#primaryRules',item.primary_rules); setRules('#upperLaws',item.upper_laws); setRules('#relatedRules',item.related_rules);
+  $('#editorTitle').textContent=item.label; $('#editorSubtitle').textContent=`${item.topic_key} · 검색어 ${item.triggers.length}개`; $('#deleteBtn').hidden=false;
+  document.querySelectorAll('.topic-card').forEach(x=>x.classList.toggle('active',Number(x.dataset.id)===item.id));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function renderList() {
+  const el=$('#topicList'); const keyword=$('#filterInput').value.trim().toLowerCase();
+  const filtered=topics.filter(x=>!keyword || [x.label,x.topic_key,x.description,...x.triggers].join(' ').toLowerCase().includes(keyword));
+  el.innerHTML='';
+  filtered.forEach(item=>{ const b=document.createElement('button'); b.type='button'; b.className='topic-card'; b.dataset.id=item.id; b.innerHTML=`<div class="topic-meta"><strong>${item.label}</strong><span class="badge ${item.is_active?'on':''}">${item.is_active?'사용 중':'숨김'}</span></div><span>${item.topic_key}</span><span>${item.triggers.slice(0,4).join(' · ') || '등록된 검색어 없음'}</span>`; b.onclick=()=>fillForm(item); el.append(b); });
+  if(!filtered.length) el.innerHTML='<p style="padding:20px;color:#73807b">일치하는 주제가 없습니다.</p>';
+}
+async function loadAll() {
+  const [summary,list]=await Promise.all([api('/api/admin/summary'),api('/api/admin/knowledge')]);
+  $('#topicCount').textContent=summary.topic_count; $('#activeCount').textContent=summary.active_count; $('#archiveCount').textContent=summary.archive_count;
+  topics=list.items; renderList();
+}
+function payload() { return {topic_key:$('#topicKey').value.trim(),label:$('#labelInput').value.trim(),description:$('#descriptionInput').value.trim(),intent_summary:$('#intentInput').value.trim(),triggers:lines($('#triggersInput').value),search_terms:lines($('#searchTermsInput').value),primary_rules:getRules('#primaryRules'),upper_laws:getRules('#upperLaws'),related_rules:getRules('#relatedRules'),checklist:lines($('#checklistInput').value),related_tasks:lines($('#tasksInput').value),notes:$('#notesInput').value.trim(),is_active:$('#activeInput').checked,priority:Number($('#priorityInput').value||50)}; }
 
-## 신규 API
-`GET /api/search/popular?days=30&limit=6`
+$('#loginForm').addEventListener('submit',async e=>{e.preventDefault(); token=$('#tokenInput').value.trim(); try{await api('/api/admin/summary'); sessionStorage.setItem('findol_admin_token',token); $('#loginError').textContent=''; $('#loginDialog').close(); await loadAll();}catch(err){$('#loginError').textContent=err.message;}});
+$('#topicForm').addEventListener('submit',async e=>{e.preventDefault(); const id=$('#topicId').value; try{await api(id?`/api/admin/knowledge/${id}`:'/api/admin/knowledge',{method:id?'PUT':'POST',body:JSON.stringify(payload())}); toast('저장했습니다. 검색에 즉시 반영됩니다.'); await loadAll(); if(id){const item=topics.find(x=>x.id===Number(id)); if(item) fillForm(item);} else resetForm();}catch(err){alert(err.message);}});
+$('#deleteBtn').onclick=async()=>{const id=$('#topicId').value;if(!id||!confirm('이 지식 주제를 삭제할까요?'))return;try{await api(`/api/admin/knowledge/${id}`,{method:'DELETE'});toast('삭제했습니다.');resetForm();await loadAll();}catch(err){alert(err.message);}};
+$('#newBtn').onclick=resetForm; $('#resetBtn').onclick=resetForm; $('#filterInput').oninput=renderList;
+$('#logoutBtn').onclick=()=>{sessionStorage.removeItem('findol_admin_token');token='';$('#tokenInput').value='';$('#loginDialog').showModal();};
+document.querySelectorAll('[data-add-rule]').forEach(btn=>btn.onclick=()=>{const map={primary:'#primaryRules',upper:'#upperLaws',related:'#relatedRules'};$(map[btn.dataset.addRule]).append(ruleRow());});
 
-## 신규 DB 테이블
-`search_events`
-
-기존 DB는 삭제하거나 재생성할 필요가 없습니다. 배포 시 SQLAlchemy가 새 테이블만 자동 생성합니다.
-
-## Render 무료 SQLite 주의
-Render의 임시 SQLite를 계속 사용하면 재배포·인스턴스 교체 때 검색 통계가 사라질 수 있습니다. 실제 운영 통계를 장기간 쌓으려면 `DATABASE_URL`로 영구 PostgreSQL/Supabase DB를 연결해야 합니다.
+if(!token) $('#loginDialog').showModal(); else loadAll().catch(err=>{console.error(err);$('#loginDialog').showModal();});
