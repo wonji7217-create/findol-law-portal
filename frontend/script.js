@@ -424,7 +424,7 @@ async function loadHomeDashboard() {
     $("archiveTotalBadge").textContent = `${data.total || 0}건`;
     $("upcomingBadge").textContent = `${data.upcoming_count || 0}건`;
     $("recentArchiveList").innerHTML = renderMiniPosts(data.recent || [], "published_date", "아직 쌓인 개정정보가 없어요.");
-    $("upcomingList").innerHTML = renderMiniPosts(data.upcoming || [], "enforcement_date", "다가오는 시행일이 없어요.", true);
+    $("upcomingList").innerHTML = renderUpcomingPosts(data.upcoming || []);
     bindArchiveOpenButtons();
   } catch (error) {
     $("recentArchiveList").innerHTML = `<div class="soft-empty">${escapeHtml(error.message)}</div>`;
@@ -438,6 +438,17 @@ function renderMiniPosts(items, dateField, emptyMessage, showDday = false) {
     const dday = showDday ? daysUntil(item[dateField]) : null;
     const dateLabel = showDday && dday !== null ? (dday === 0 ? "D-DAY" : `D-${dday}`) : formatDate(item[dateField]);
     return `<button class="mini-post" type="button" data-archive-id="${item.id}"><span class="mini-post-date">${escapeHtml(dateLabel)}</span><span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.material_type || item.department || "")}</small></span></button>`;
+  }).join("");
+}
+
+function renderUpcomingPosts(items) {
+  if (!items.length) return `<div class="soft-empty">다가오는 시행일이나 의견제출 마감일이 없어요.</div>`;
+  return items.map((item) => {
+    const targetDate = item.next_date || item.deadline_date || item.enforcement_date;
+    const dday = daysUntil(targetDate);
+    const dateLabel = dday === null ? formatDate(targetDate) : (dday === 0 ? "D-DAY" : `D-${dday}`);
+    const eventLabel = item.next_event || (item.deadline_date ? "의견마감" : "시행");
+    return `<button class="mini-post" type="button" data-archive-id="${item.id}"><span class="mini-post-date">${escapeHtml(dateLabel)}</span><span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(eventLabel)} · ${escapeHtml(item.material_type || item.department || "")}</small></span></button>`;
   }).join("");
 }
 

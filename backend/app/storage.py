@@ -533,20 +533,37 @@ def get_archive_stats(db: Session, recent_limit: int = 5, upcoming_limit: int = 
         .limit(recent_limit)
         .all()
     )
-    upcoming_rows = (
-        db.query(models.ArchiveEntry)
-        .filter(models.ArchiveEntry.enforcement_date > today)
-        .order_by(models.ArchiveEntry.enforcement_date.asc())
-        .limit(upcoming_limit)
-        .all()
-    )
+
+    # 시행일뿐 아니라 입법·행정예고의 의견제출 마감일도 홈의 다가오는 일정에 표시한다.
+    upcoming_query = db.query(models.ArchiveEntry).filter(or_(
+        models.ArchiveEntry.enforcement_date > today,
+        models.ArchiveEntry.deadline_date >= today,
+    ))
+    upcoming_all = upcoming_query.all()
+
+    def next_event(row):
+        candidates = []
+        if row.deadline_date and row.deadline_date >= today:
+            candidates.append((row.deadline_date, "의견마감"))
+        if row.enforcement_date and row.enforcement_date > today:
+            candidates.append((row.enforcement_date, "시행"))
+        return min(candidates, key=lambda item: item[0]) if candidates else ("99999999", "일정")
+
+    upcoming_all.sort(key=lambda row: (next_event(row)[0], row.title or ""))
+    upcoming_rows = upcoming_all[:upcoming_limit]
+    serialized_upcoming = []
+    for row in upcoming_rows:
+        item = _serialize_archive(row)
+        item["next_date"], item["next_event"] = next_event(row)
+        serialized_upcoming.append(item)
+
     month_prefix = date.today().strftime("%Y%m")
     return {
         "total": db.query(models.ArchiveEntry).count(),
         "this_month": db.query(models.ArchiveEntry).filter(models.ArchiveEntry.published_date.startswith(month_prefix)).count(),
-        "upcoming_count": db.query(models.ArchiveEntry).filter(models.ArchiveEntry.enforcement_date > today).count(),
+        "upcoming_count": len(upcoming_all),
         "recent": [_serialize_archive(row) for row in recent_rows],
-        "upcoming": [_serialize_archive(row) for row in upcoming_rows],
+        "upcoming": serialized_upcoming,
     }
 
 

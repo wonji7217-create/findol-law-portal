@@ -1,0 +1,18 @@
+findol v5.9 적용 순서
+
+1. Render 환경변수에 LAWMAKING_API_OC를 먼저 등록합니다.
+   값은 국민참여입법센터 정보공개 신청 ID의 @ 앞부분입니다.
+
+2. 적용본 ZIP을 풉니다.
+
+3. GitHub 저장소 루트에서 Add file → Upload files를 선택합니다.
+
+4. ZIP 안의 backend와 frontend 폴더를 기존 경로에 덮어씁니다.
+
+5. Commit changes를 누릅니다.
+
+6. Render 배포가 Live가 되면 관리자 페이지를 엽니다.
+
+7. 국민참여입법센터 동기화 → 새 정보 가져오기를 누릅니다.
+
+8. 홈 최근 개정정보·다가오는 일정과 개정 아카이브를 확인합니다.

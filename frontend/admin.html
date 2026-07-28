@@ -37,6 +37,21 @@
         <article><span>개정 아카이브</span><strong id="archiveCount">-</strong></article>
       </section>
 
+      <section class="sync-panel" aria-labelledby="syncTitle">
+        <div>
+          <p class="eyebrow">LAWMAKING API</p>
+          <h2 id="syncTitle">국민참여입법센터 동기화</h2>
+          <p>행정예고·입법예고 목록과 상세 본문, 첨부파일 링크를 가져와 개정 아카이브에 반영합니다.</p>
+        </div>
+        <div class="sync-options">
+          <label class="check-option"><input id="syncAdministrative" type="checkbox" checked />행정예고</label>
+          <label class="check-option"><input id="syncLegislative" type="checkbox" checked />입법예고</label>
+          <label class="sync-limit">최대 수집<input id="syncLimit" type="number" min="1" max="200" value="60" /></label>
+          <button id="syncLawmakingBtn" class="primary" type="button">새 정보 가져오기</button>
+        </div>
+        <div id="syncStatus" class="sync-status">API 연결 상태를 확인하는 중입니다.</div>
+      </section>
+
       <section class="manager-grid">
         <div class="list-panel">
           <div class="panel-head">
@@ -122,6 +137,6 @@
     </div>
   </template>
   <div id="toast" class="toast"></div>
-  <script src="admin.js"></script>
+  <script src="admin.js?v=5.9"></script>
 </body>
 </html>

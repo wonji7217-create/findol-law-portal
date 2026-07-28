@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 load_dotenv()
 
-from . import law_api, storage, substance_service
+from . import law_api, lawmaking_api, storage, substance_service
 from .db import init_db, get_db, SessionLocal
 from .search_engine import (
     build_search_plan,
@@ -24,7 +24,7 @@ from .search_engine import (
 )
 
 
-app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="5.6.0")
+app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="5.9.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,8 +50,9 @@ def health(db: Session = Depends(get_db)):
     return {
         "status": "ok",
         "service": "findol 화학법령 검색·개정 아카이브",
-        "version": "5.6.0",
+        "version": "5.9.0",
         "archive_count": stats["total"],
+        "lawmaking_api_configured": lawmaking_api.configured(),
     }
 
 
@@ -429,6 +430,55 @@ def admin_summary(_: bool = Depends(_require_admin), db: Session = Depends(get_d
         "topic_count": len(topics),
         "active_count": sum(1 for item in topics if item["is_active"]),
         "archive_count": storage.get_archive_stats(db, 0, 0)["total"],
+        "lawmaking_api_configured": lawmaking_api.configured(),
+    }
+
+
+class LawmakingSyncPayload(BaseModel):
+    include_administrative: bool = True
+    include_legislative: bool = True
+    max_items: int = Field(60, ge=1, le=200)
+
+
+@app.post("/api/admin/lawmaking/sync")
+async def lawmaking_sync(
+    payload: LawmakingSyncPayload,
+    _: bool = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    """국민참여입법센터의 행정예고·입법예고를 수집해 개정 아카이브에 반영한다."""
+    if not lawmaking_api.configured():
+        raise HTTPException(status_code=503, detail="LAWMAKING_API_OC 환경변수가 설정되지 않았습니다.")
+    try:
+        items = await lawmaking_api.collect_candidates(
+            include_administrative=payload.include_administrative,
+            include_legislative=payload.include_legislative,
+            max_items=payload.max_items,
+        )
+    except lawmaking_api.LawmakingApiError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    created = 0
+    unchanged = 0
+    imported_items = []
+    for item in items:
+        archived, was_created = storage.import_archive_entry(db, lawmaking_api.to_archive_payload(item))
+        imported_items.append({
+            "title": archived["title"],
+            "material_type": archived["material_type"],
+            "department": archived["department"],
+            "created": was_created,
+        })
+        if was_created:
+            created += 1
+        else:
+            unchanged += 1
+
+    return {
+        "fetched": len(items),
+        "created_or_changed": created,
+        "unchanged": unchanged,
+        "items": imported_items[:30],
     }
 
 

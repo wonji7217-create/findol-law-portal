@@ -52,9 +52,38 @@ function renderList() {
 async function loadAll() {
   const [summary,list]=await Promise.all([api('/api/admin/summary'),api('/api/admin/knowledge')]);
   $('#topicCount').textContent=summary.topic_count; $('#activeCount').textContent=summary.active_count; $('#archiveCount').textContent=summary.archive_count;
+  const syncStatus=$('#syncStatus');
+  if (syncStatus) {
+    syncStatus.textContent=summary.lawmaking_api_configured
+      ? 'API 인증값이 설정되어 있습니다. 버튼을 누르면 최신 관련 예고를 확인합니다.'
+      : 'Render 환경변수 LAWMAKING_API_OC가 아직 설정되지 않았습니다.';
+    syncStatus.classList.toggle('warning',!summary.lawmaking_api_configured);
+    $('#syncLawmakingBtn').disabled=!summary.lawmaking_api_configured;
+  }
   topics=list.items; renderList();
 }
 function payload() { return {topic_key:$('#topicKey').value.trim(),label:$('#labelInput').value.trim(),description:$('#descriptionInput').value.trim(),intent_summary:$('#intentInput').value.trim(),triggers:lines($('#triggersInput').value),search_terms:lines($('#searchTermsInput').value),primary_rules:getRules('#primaryRules'),upper_laws:getRules('#upperLaws'),related_rules:getRules('#relatedRules'),checklist:lines($('#checklistInput').value),related_tasks:lines($('#tasksInput').value),notes:$('#notesInput').value.trim(),is_active:$('#activeInput').checked,priority:Number($('#priorityInput').value||50)}; }
+
+
+$('#syncLawmakingBtn').onclick=async()=>{
+  const btn=$('#syncLawmakingBtn');
+  const status=$('#syncStatus');
+  const payload={
+    include_administrative:$('#syncAdministrative').checked,
+    include_legislative:$('#syncLegislative').checked,
+    max_items:Number($('#syncLimit').value||60),
+  };
+  if(!payload.include_administrative&&!payload.include_legislative){alert('행정예고 또는 입법예고 중 하나를 선택하세요.');return;}
+  btn.disabled=true; btn.textContent='가져오는 중...'; status.classList.remove('warning');
+  status.textContent='목록과 상세정보를 확인하고 있어요. 자료 수에 따라 잠시 걸릴 수 있습니다.';
+  try{
+    const result=await api('/api/admin/lawmaking/sync',{method:'POST',body:JSON.stringify(payload)});
+    status.textContent=`확인 ${result.fetched}건 · 신규/변경 ${result.created_or_changed}건 · 기존과 동일 ${result.unchanged}건`;
+    toast('국민참여입법센터 동기화를 마쳤습니다.');
+    await loadAll();
+  }catch(err){status.textContent=err.message;status.classList.add('warning');}
+  finally{btn.disabled=false;btn.textContent='새 정보 가져오기';}
+};
 
 $('#loginForm').addEventListener('submit',async e=>{e.preventDefault(); token=$('#tokenInput').value.trim(); try{await api('/api/admin/summary'); sessionStorage.setItem('findol_admin_token',token); $('#loginError').textContent=''; $('#loginDialog').close(); await loadAll();}catch(err){$('#loginError').textContent=err.message;}});
 $('#topicForm').addEventListener('submit',async e=>{e.preventDefault(); const id=$('#topicId').value; try{await api(id?`/api/admin/knowledge/${id}`:'/api/admin/knowledge',{method:id?'PUT':'POST',body:JSON.stringify(payload())}); toast('저장했습니다. 검색에 즉시 반영됩니다.'); await loadAll(); if(id){const item=topics.find(x=>x.id===Number(id)); if(item) fillForm(item);} else resetForm();}catch(err){alert(err.message);}});
