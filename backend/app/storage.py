@@ -299,20 +299,8 @@ def save_law_results(db: Session, results: list[dict], query: str) -> int:
             fetched_at=fetched_at,
         )
         db.add(snapshot)
-        _create_archive_from_snapshot(
-            db,
-            kind="law",
-            external_id=external_id,
-            event_action="new" if latest is None else "changed",
-            title=item.get("name") or "(제목 없음)",
-            material_type="법령",
-            department=item.get("department"),
-            detail_link=item.get("detail_link"),
-            source_query=query,
-            promulgation_date=item.get("promulgation_date"),
-            enforcement_date=item.get("enforcement_date"),
-            fetched_at=fetched_at,
-        )
+        # 검색 결과는 변경 감지용 스냅샷으로만 저장합니다.
+        # 개정 아카이브는 검색어와 분리하여 공식 수집기/관리자 등록 자료만 사용합니다.
         added += 1
     db.commit()
     return added
@@ -350,20 +338,8 @@ def save_admrul_results(db: Session, results: list[dict], query: str) -> int:
             fetched_at=fetched_at,
         )
         db.add(snapshot)
-        _create_archive_from_snapshot(
-            db,
-            kind="admin_rule",
-            external_id=external_id,
-            event_action="new" if latest is None else "changed",
-            title=item.get("name") or "(제목 없음)",
-            material_type=item.get("type") or "고시·행정규칙",
-            department=item.get("department"),
-            detail_link=item.get("detail_link"),
-            source_query=query,
-            promulgation_date=item.get("promulgation_date"),
-            enforcement_date=None,
-            fetched_at=fetched_at,
-        )
+        # 검색 결과는 변경 감지용 스냅샷으로만 저장합니다.
+        # 개정 아카이브는 검색어와 분리하여 공식 수집기/관리자 등록 자료만 사용합니다.
         added += 1
     db.commit()
     return added
@@ -520,26 +496,150 @@ def get_archive(
     return {"total": total, "items": [_serialize_archive(row) for row in rows]}
 
 
+
+def _latest_official_archive_entries(db: Session) -> list[models.ArchiveEntry]:
+    """검색 스냅샷과 분리된 공식/수동 수집 아카이브의 최신 버전만 반환한다.
+
+    search_law/search_admrul로 생성되던 과거 스냅샷 기반 행은 source_key가 비어 있다.
+    국민참여입법센터 동기화와 관리자 import는 source_key를 가지므로, 기본 아카이브에서는
+    이 자료만 노출한다. 같은 source_key가 갱신된 경우 가장 최신 revision만 사용한다.
+    """
+    rows = (
+        db.query(models.ArchiveEntry)
+        .filter(models.ArchiveEntry.source_key.isnot(None), models.ArchiveEntry.source_key != "")
+        .order_by(models.ArchiveEntry.collected_at.desc(), models.ArchiveEntry.revision_no.desc())
+        .all()
+    )
+    latest: list[models.ArchiveEntry] = []
+    seen: set[str] = set()
+    for row in rows:
+        key = row.source_key or row.archive_key
+        if key in seen:
+            continue
+        seen.add(key)
+        latest.append(row)
+    return latest
+
+
+def _published_event(entry: models.ArchiveEntry) -> tuple[str, str]:
+    material = f"{entry.material_type or ''} {' '.join(_json_loads(entry.tags_json))}"
+    if "행정예고" in material:
+        return "administrative_notice", "행정예고"
+    if "입법예고" in material:
+        return "legislative_notice", "입법예고"
+    return "published", "게시"
+
+
+def _revision_events_for_entry(entry: models.ArchiveEntry) -> list[dict]:
+    base = _serialize_archive(entry)
+    events: list[dict] = []
+
+    def add(code: str, label: str, event_date: str | None):
+        if not event_date:
+            return
+        events.append({
+            "archive_id": entry.id,
+            "event_code": code,
+            "event_type": label,
+            "event_date": event_date,
+            "title": entry.title,
+            "material_type": entry.material_type,
+            "department": entry.department,
+            "source_name": entry.source_name,
+            "official_url": entry.official_url,
+            "published_date": entry.published_date,
+            "promulgation_date": entry.promulgation_date,
+            "enforcement_date": entry.enforcement_date,
+            "deadline_date": entry.deadline_date,
+            "summary": entry.summary,
+            "status": base.get("status"),
+            "tags": base.get("tags") or [],
+            "related_tasks": base.get("related_tasks") or [],
+        })
+
+    if entry.published_date:
+        code, label = _published_event(entry)
+        add(code, label, entry.published_date)
+    add("promulgated", "공포", entry.promulgation_date)
+    add("effective", "시행", entry.enforcement_date)
+    add("deadline", "의견마감", entry.deadline_date)
+    return events
+
+
+def get_revision_events(
+    db: Session,
+    *,
+    keyword: str | None = None,
+    event_type: str | None = None,
+    year: int | None = None,
+    task: str | None = None,
+    limit: int = 30,
+    offset: int = 0,
+) -> dict:
+    """검색어와 무관하게 공식 수집 자료의 날짜 이벤트를 최신순으로 반환한다."""
+    events: list[dict] = []
+    for entry in _latest_official_archive_entries(db):
+        events.extend(_revision_events_for_entry(entry))
+
+    if keyword:
+        needle = keyword.casefold().strip()
+        def matches(item: dict) -> bool:
+            hay = " ".join([
+                item.get("title") or "",
+                item.get("summary") or "",
+                item.get("department") or "",
+                item.get("source_name") or "",
+                " ".join(item.get("tags") or []),
+                " ".join(item.get("related_tasks") or []),
+            ]).casefold()
+            return needle in hay
+        events = [item for item in events if matches(item)]
+
+    if event_type and event_type != "all":
+        events = [item for item in events if item["event_code"] == event_type]
+    if year:
+        prefix = str(year)
+        events = [item for item in events if (item.get("event_date") or "").startswith(prefix)]
+    if task:
+        events = [item for item in events if task in (item.get("related_tasks") or [])]
+
+    priority = {
+        "effective": 0,
+        "promulgated": 1,
+        "deadline": 2,
+        "administrative_notice": 3,
+        "legislative_notice": 4,
+        "published": 5,
+    }
+    events.sort(key=lambda item: (item.get("event_date") or "", -priority.get(item.get("event_code"), 9), item.get("title") or ""), reverse=True)
+    total = len(events)
+    return {"total": total, "items": events[offset:offset + limit]}
+
+
+def get_revision_event_stats(db: Session) -> dict:
+    events: list[dict] = []
+    for entry in _latest_official_archive_entries(db):
+        events.extend(_revision_events_for_entry(entry))
+    today = _today_yyyymmdd()
+    month_prefix = today[:6]
+    upcoming = [item for item in events if item["event_code"] in {"effective", "deadline"} and (item.get("event_date") or "") >= today]
+    return {
+        "total": len(events),
+        "this_month": sum(1 for item in events if (item.get("event_date") or "").startswith(month_prefix)),
+        "upcoming_count": len(upcoming),
+    }
+
 def get_archive_item(db: Session, entry_id: int) -> dict | None:
     row = db.query(models.ArchiveEntry).filter(models.ArchiveEntry.id == entry_id).first()
     return _serialize_archive(row) if row else None
 
 
 def get_archive_stats(db: Session, recent_limit: int = 5, upcoming_limit: int = 5) -> dict:
+    """홈 대시보드용 통계. 검색 스냅샷이 아니라 공식/수동 수집 자료만 사용한다."""
     today = _today_yyyymmdd()
-    recent_rows = (
-        db.query(models.ArchiveEntry)
-        .order_by(models.ArchiveEntry.published_date.desc(), models.ArchiveEntry.collected_at.desc())
-        .limit(recent_limit)
-        .all()
-    )
-
-    # 시행일뿐 아니라 입법·행정예고의 의견제출 마감일도 홈의 다가오는 일정에 표시한다.
-    upcoming_query = db.query(models.ArchiveEntry).filter(or_(
-        models.ArchiveEntry.enforcement_date > today,
-        models.ArchiveEntry.deadline_date >= today,
-    ))
-    upcoming_all = upcoming_query.all()
+    rows = _latest_official_archive_entries(db)
+    rows.sort(key=lambda row: ((row.published_date or ""), row.collected_at or datetime.min), reverse=True)
+    recent_rows = rows[:recent_limit] if recent_limit else []
 
     def next_event(row):
         candidates = []
@@ -549,18 +649,19 @@ def get_archive_stats(db: Session, recent_limit: int = 5, upcoming_limit: int = 
             candidates.append((row.enforcement_date, "시행"))
         return min(candidates, key=lambda item: item[0]) if candidates else ("99999999", "일정")
 
+    upcoming_all = [row for row in rows if next_event(row)[0] != "99999999"]
     upcoming_all.sort(key=lambda row: (next_event(row)[0], row.title or ""))
-    upcoming_rows = upcoming_all[:upcoming_limit]
+    upcoming_rows = upcoming_all[:upcoming_limit] if upcoming_limit else []
     serialized_upcoming = []
     for row in upcoming_rows:
         item = _serialize_archive(row)
         item["next_date"], item["next_event"] = next_event(row)
         serialized_upcoming.append(item)
 
-    month_prefix = date.today().strftime("%Y%m")
+    month_prefix = today[:6]
     return {
-        "total": db.query(models.ArchiveEntry).count(),
-        "this_month": db.query(models.ArchiveEntry).filter(models.ArchiveEntry.published_date.startswith(month_prefix)).count(),
+        "total": len(rows),
+        "this_month": sum(1 for row in rows if (row.published_date or "").startswith(month_prefix)),
         "upcoming_count": len(upcoming_all),
         "recent": [_serialize_archive(row) for row in recent_rows],
         "upcoming": serialized_upcoming,
@@ -649,37 +750,35 @@ def get_calendar_events(
     prefix = f"{year:04d}{month:02d}"
     selected = set(event_types or ["published", "promulgated", "effective", "deadline"])
 
-    query = db.query(models.ArchiveEntry)
+    rows = _latest_official_archive_entries(db)
     if kind and kind != "all":
-        query = query.filter(models.ArchiveEntry.kind == kind)
+        rows = [row for row in rows if row.kind == kind]
     if task:
-        query = query.filter(models.ArchiveEntry.related_tasks_json.contains(task))
+        rows = [row for row in rows if task in _json_loads(row.related_tasks_json)]
 
-    rows = query.order_by(models.ArchiveEntry.collected_at.desc()).all()
     events: list[dict] = []
     seen: set[tuple] = set()
-    mapping = [
-        ("published", "게시", "published_date"),
-        ("promulgated", "공포", "promulgation_date"),
-        ("effective", "시행", "enforcement_date"),
-        ("deadline", "의견마감", "deadline_date"),
-    ]
 
     for entry in rows:
-        for event_code, event_label, field in mapping:
-            if event_code not in selected:
-                continue
-            event_date = getattr(entry, field)
+        mappings: list[tuple[str, str, str | None, str]] = []
+        if "published" in selected and entry.published_date:
+            published_code, published_label = _published_event(entry)
+            mappings.append((published_code, published_label, entry.published_date, "published"))
+        if "promulgated" in selected:
+            mappings.append(("promulgated", "공포", entry.promulgation_date, "promulgated"))
+        if "effective" in selected:
+            mappings.append(("effective", "시행", entry.enforcement_date, "effective"))
+        if "deadline" in selected:
+            mappings.append(("deadline", "의견마감", entry.deadline_date, "deadline"))
+
+        for event_code, event_label, event_date, selected_code in mappings:
             if not event_date or not event_date.startswith(prefix):
                 continue
-
-            # 게시일은 게시글별 표시, 공포/시행/마감은 같은 문서·날짜 중복 제거.
-            dedupe_id = entry.id if event_code == "published" else (entry.external_id or entry.title)
+            dedupe_id = entry.id if selected_code == "published" else (entry.source_key or entry.external_id or entry.title)
             dedupe_key = (event_code, event_date, entry.kind, dedupe_id)
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
-
             events.append({
                 "archive_id": entry.id,
                 "date": event_date,
@@ -689,12 +788,20 @@ def get_calendar_events(
                 "title": entry.title,
                 "material_type": entry.material_type,
                 "department": entry.department,
+                "source_name": entry.source_name,
                 "status": _status_for(entry),
                 "official_url": entry.official_url,
                 "tags": _json_loads(entry.tags_json),
             })
 
-    priority = {"deadline": 0, "effective": 1, "promulgated": 2, "published": 3}
+    priority = {
+        "deadline": 0,
+        "effective": 1,
+        "promulgated": 2,
+        "administrative_notice": 3,
+        "legislative_notice": 4,
+        "published": 5,
+    }
     events.sort(key=lambda item: (item["date"], priority.get(item["event_code"], 9), item["title"]))
     return events
 

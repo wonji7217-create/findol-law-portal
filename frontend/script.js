@@ -216,7 +216,7 @@ searchForm.addEventListener("submit", async (event) => {
 
     const displayedTotal = coreRules.length + upperLaws.length + relatedRules.length + laws.length + adminRules.length;
     $("searchResultTitle").textContent = `“${data.query}” 검색 결과`;
-    $("searchResultCount").textContent = `${displayedTotal}건 · 아카이브 신규 ${data.newly_saved || 0}건`;
+    $("searchResultCount").textContent = `${displayedTotal}건 · 변경 감지 ${data.newly_saved || 0}건`;
 
     $("searchIntentSummary").textContent = data.intent_summary || data.intent || "관련 법령·행정규칙 확인";
     $("topicChips").innerHTML = (data.topics || []).map((topic) => `<span class="topic-chip"><b>${escapeHtml(topic.label)}</b><small>${escapeHtml((topic.matched_terms || []).slice(0, 3).join(" · "))}</small></span>`).join("") || `<span class="topic-chip neutral"><b>통합검색</b><small>명확한 시설·업무 또는 물질이 감지되지 않았어요.</small></span>`;
@@ -466,8 +466,7 @@ function archiveQueryString() {
   const params = new URLSearchParams();
   const values = {
     keyword: $("archiveKeyword").value.trim(),
-    kind: $("archiveKind").value,
-    status: $("archiveStatus").value,
+    event_type: $("archiveEventType").value,
     year: $("archiveYear").value,
     task: $("archiveTask").value,
   };
@@ -479,14 +478,14 @@ function archiveQueryString() {
 
 async function loadArchive(reset = false) {
   if (reset) archiveOffset = 0;
-  if (reset) $("archiveList").innerHTML = `<div class="loading-row">개정 아카이브를 불러오는 중...</div>`;
+  if (reset) $("archiveList").innerHTML = `<div class="loading-row">최근 개정 이력을 불러오는 중...</div>`;
 
   try {
     const [listResponse, statsResponse] = await Promise.all([
-      fetch(`${API_BASE}/api/archive?${archiveQueryString()}`),
-      fetch(`${API_BASE}/api/archive/stats?recent_limit=0&upcoming_limit=0`),
+      fetch(`${API_BASE}/api/revision-events?${archiveQueryString()}`),
+      fetch(`${API_BASE}/api/revision-events/stats`),
     ]);
-    if (!listResponse.ok) throw new Error(`아카이브 서버 오류 (${listResponse.status})`);
+    if (!listResponse.ok) throw new Error(`개정이력 서버 오류 (${listResponse.status})`);
     const data = await listResponse.json();
     const stats = statsResponse.ok ? await statsResponse.json() : {};
     archiveTotal = data.total || 0;
@@ -494,42 +493,46 @@ async function loadArchive(reset = false) {
     $("archiveMetricTotal").textContent = stats.total || 0;
     $("archiveMetricMonth").textContent = stats.this_month || 0;
     $("archiveMetricUpcoming").textContent = stats.upcoming_count || 0;
-    $("archiveResultSummary").textContent = `조건에 맞는 개정정보 ${archiveTotal}건`;
+    $("archiveResultSummary").textContent = `날짜 기준 개정 이력 ${archiveTotal}건`;
 
-    const cards = (data.items || []).map(renderArchiveCard).join("");
-    if (reset) $("archiveList").innerHTML = cards || emptyState("아카이브 기록이 없어요.", "법령 검색을 실행하거나 뉴스레터 수집기를 연결하면 자동으로 쌓입니다.");
+    const cards = (data.items || []).map(renderRevisionEvent).join("");
+    if (reset) $("archiveList").innerHTML = cards || emptyState("표시할 개정 이력이 없어요.", "관리자에서 국민참여입법센터 동기화를 실행하면 검색과 무관하게 최근 행정예고·입법예고가 쌓입니다.");
     else $("archiveList").insertAdjacentHTML("beforeend", cards);
 
     archiveOffset += (data.items || []).length;
     $("archiveLoadMore").hidden = archiveOffset >= archiveTotal;
     bindArchiveOpenButtons();
   } catch (error) {
-    $("archiveList").innerHTML = emptyState("아카이브를 불러오지 못했어요.", error.message);
+    $("archiveList").innerHTML = emptyState("개정 이력을 불러오지 못했어요.", error.message);
   }
 }
 
-function renderArchiveCard(item) {
-  const tags = (item.tags || []).slice(0, 5).map((tag) => `<span>#${escapeHtml(tag)}</span>`).join("");
-  return `<article class="archive-card">
-    <button class="archive-card-main" type="button" data-archive-id="${item.id}">
-      <div class="archive-card-top"><div class="archive-badges"><span class="material-badge">${escapeHtml(item.material_type || "자료")}</span><span class="status-badge status-${statusClass(item.status)}">${escapeHtml(item.status || "신규")}</span></div><time>${formatDate(item.published_date)}</time></div>
-      <h3>${escapeHtml(item.title)}</h3>
-      <p>${escapeHtml(item.summary || "개정정보가 아카이브에 저장되었습니다.")}</p>
-      <div class="archive-date-row">
-        ${dateItem("게시", item.published_date, "published")}
-        ${dateItem("공포", item.promulgation_date, "promulgated")}
-        ${dateItem("시행", item.enforcement_date, "effective")}
-        ${dateItem("의견마감", item.deadline_date, "deadline")}
-      </div>
-      <div class="archive-card-footer"><span>${escapeHtml(item.department || item.source_name || "출처 확인 필요")}</span><div class="archive-tags">${tags}</div></div>
-    </button>
-    ${item.official_url ? `<a class="official-link" href="${escapeHtml(item.official_url)}" target="_blank" rel="noopener">공식 원문 ↗</a>` : ""}
-  </article>`;
+function revisionEventClass(code = "published") {
+  const allowed = ["administrative_notice", "legislative_notice", "promulgated", "effective", "deadline", "published"];
+  return allowed.includes(code) ? code : "published";
 }
 
-function dateItem(label, value, code) {
-  if (!value) return "";
-  return `<span class="archive-date ${code}"><b>${label}</b>${formatDate(value)}</span>`;
+function renderRevisionEvent(item) {
+  const code = revisionEventClass(item.event_code);
+  const source = item.source_name || item.department || "출처 확인 필요";
+  const isPostedEvent = ["administrative_notice", "legislative_notice", "published"].includes(code);
+  const originalPublished = item.published_date
+    ? (isPostedEvent ? "원문 게시" : `원문 게시 ${formatDate(item.published_date)}`)
+    : "원문 게시일 확인 필요";
+  const materialBits = (item.material_type || "").split("·").map((value) => value.trim()).filter(Boolean);
+  const subMeta = [item.department, ...materialBits.filter((value) => !value.includes("행정예고") && !value.includes("입법예고"))].filter(Boolean).slice(0, 3).join(" · ");
+  return `<article class="revision-event-row event-border-${code}">
+    <button class="revision-event-main" type="button" data-archive-id="${item.archive_id}">
+      <div class="revision-event-date"><time>${formatDate(item.event_date)}</time><small>${escapeHtml(originalPublished)}</small></div>
+      <div class="revision-event-body">
+        <div class="revision-event-badges"><span class="event-key key-${code}">${escapeHtml(item.event_type || "게시")}</span>${item.status ? `<span class="status-mini">${escapeHtml(item.status)}</span>` : ""}</div>
+        <h3>${escapeHtml(item.title)}</h3>
+        <p>${escapeHtml(subMeta || item.summary || "공식 수집 자료")}</p>
+      </div>
+      <div class="revision-event-source"><span>출처</span><strong>${escapeHtml(source)}</strong></div>
+    </button>
+    ${item.official_url ? `<a class="revision-source-link" href="${escapeHtml(item.official_url)}" target="_blank" rel="noopener">${escapeHtml(source)}에서 확인 ↗</a>` : ""}
+  </article>`;
 }
 
 function statusClass(status = "") {
@@ -578,9 +581,13 @@ function renderArchiveDetail(item) {
     return `<li>${attachment.url ? `<a href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener">${escapeHtml(label)} ↗</a>` : escapeHtml(label)}</li>`;
   }).join("") || "<li>등록된 첨부파일이 없습니다.</li>";
 
-  return `<header class="detail-header"><div class="archive-badges"><span class="material-badge">${escapeHtml(item.material_type || "자료")}</span><span class="status-badge status-${statusClass(item.status)}">${escapeHtml(item.status)}</span></div><h2 id="archiveModalTitle">${escapeHtml(item.title)}</h2><p>${escapeHtml(item.department || item.source_name || "출처 확인 필요")}</p></header>
-    <div class="detail-date-grid">${detailDate("게시일", item.published_date)}${detailDate("공포일", item.promulgation_date)}${detailDate("시행일", item.enforcement_date)}${detailDate("의견마감", item.deadline_date)}${detailDate("수집일", item.collected_at ? item.collected_at.slice(0, 10).replaceAll("-", "") : "")}</div>
-    <section class="detail-section official-section"><span class="detail-section-label">공식 자료 기반</span><h3>수집 내용</h3><p>${escapeHtml(item.summary || "공식 자료의 제목과 날짜 정보가 수집되었습니다.")}</p>${item.official_url ? `<a class="primary-link" href="${escapeHtml(item.official_url)}" target="_blank" rel="noopener">공식 원문 확인 ↗</a>` : ""}</section>
+  const source = item.source_name || item.department || "출처 확인 필요";
+  const eventBadges = [];
+  if ((item.material_type || "").includes("행정예고")) eventBadges.push(`<span class="event-key key-administrative_notice">행정예고</span>`);
+  if ((item.material_type || "").includes("입법예고")) eventBadges.push(`<span class="event-key key-legislative_notice">입법예고</span>`);
+  return `<header class="detail-header"><div class="archive-badges">${eventBadges.join("")}<span class="material-badge">${escapeHtml(item.material_type || "자료")}</span><span class="status-badge status-${statusClass(item.status)}">${escapeHtml(item.status)}</span></div><h2 id="archiveModalTitle">${escapeHtml(item.title)}</h2><p>${escapeHtml(item.department || source)}</p><small class="detail-source-caption">출처 · ${escapeHtml(source)}</small></header>
+    <div class="detail-date-grid">${detailDate("원문 게시", item.published_date)}${detailDate("공포일", item.promulgation_date)}${detailDate("시행일", item.enforcement_date)}${detailDate("의견마감", item.deadline_date)}${detailDate("findol 수집", item.collected_at ? item.collected_at.slice(0, 10).replaceAll("-", "") : "")}</div>
+    <section class="detail-section official-section source-verification-section"><span class="detail-section-label">공식 출처</span><h3>${escapeHtml(source)}에서 확인할 수 있어요</h3><p>${escapeHtml(item.summary || "공식 자료의 제목과 날짜 정보가 수집되었습니다.")}</p>${item.official_url ? `<a class="primary-link" href="${escapeHtml(item.official_url)}" target="_blank" rel="noopener">${escapeHtml(source)}에서 원문 확인 ↗</a>` : ""}</section>
     <section class="detail-section findol-section"><span class="detail-section-label">findol 실무 메모</span><h3>운영자 정리</h3><p>${escapeHtml(item.findol_note || "아직 운영자가 작성한 실무 메모가 없습니다. 자동 수집 정보와 수동 해설은 구분해 표시됩니다.")}</p><div class="detail-tags">${tags}</div></section>
     <div class="detail-two-column"><section class="detail-section"><h3>관련 업무</h3><ul>${tasks}</ul></section><section class="detail-section"><h3>관련 법령</h3><ul>${laws}</ul></section></div>
     <section class="detail-section"><h3>첨부파일</h3><ul>${attachments}</ul></section>

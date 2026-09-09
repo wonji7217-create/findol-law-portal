@@ -2578,3 +2578,113 @@ main { max-width: var(--content); padding: 28px 28px 88px; }
   .institution-grid { grid-template-columns: 1fr; }
   .institution-link { min-height: 78px; padding: 13px; }
 }
+
+/* ============================================================
+   findol v6.0 — 검색과 분리된 개정이력 타임라인
+   ============================================================ */
+.key-administrative_notice { color: #0F766E; background: #E6F4F1; }
+.key-legislative_notice { color: #6D5BD0; background: #F0EDFF; }
+.key-promulgated { color: #B75B16; background: #FFF1E6; }
+.key-effective { color: #267A49; background: #EAF6EE; }
+.key-deadline { color: #B94747; background: #FDECEC; }
+.key-published { color: #65706B; background: #ECEFED; }
+
+.revision-legend { flex-wrap: wrap; justify-content: flex-end; }
+.revision-event-list { gap: 8px; }
+.revision-event-row {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.revision-event-row:hover {
+  transform: translateY(-1px);
+  border-color: #C8D7D0;
+  box-shadow: 0 10px 24px rgba(32, 58, 48, .06);
+}
+.revision-event-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #AAB1AD;
+}
+.event-border-administrative_notice::before { background: #2BA7A0; }
+.event-border-legislative_notice::before { background: #7B6BE1; }
+.event-border-promulgated::before { background: #F09A3E; }
+.event-border-effective::before { background: #42A62A; }
+.event-border-deadline::before { background: #E25C5C; }
+.event-border-published::before { background: #AAB1AD; }
+
+.revision-event-main {
+  width: 100%;
+  padding: 17px 185px 17px 21px;
+  display: grid;
+  grid-template-columns: 126px minmax(0, 1fr) 150px;
+  gap: 18px;
+  align-items: center;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.revision-event-date { display: grid; gap: 4px; align-self: start; }
+.revision-event-date time { color: #34413C; font-size: 12px; font-weight: 800; }
+.revision-event-date small { color: #929B97; font-size: 9.5px; }
+.revision-event-body { min-width: 0; }
+.revision-event-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
+.status-mini { color: #7B8580; background: #F2F4F2; padding: 3px 7px; border-radius: 999px; font-size: 9px; font-weight: 750; }
+.revision-event-body h3 { margin: 0; color: var(--text); font-size: 15px; line-height: 1.5; letter-spacing: -.02em; }
+.revision-event-body p { margin: 5px 0 0; color: #7B8580; font-size: 10.5px; line-height: 1.45; }
+.revision-event-source { display: grid; gap: 3px; justify-items: start; }
+.revision-event-source span { color: #9AA29F; font-size: 9px; }
+.revision-event-source strong { color: #53605B; font-size: 10px; line-height: 1.35; }
+.revision-source-link {
+  position: absolute;
+  right: 17px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 160px;
+  padding: 8px 10px;
+  color: #5D57A7;
+  background: #F7F5FF;
+  border: 1px solid #E0DAFF;
+  border-radius: 9px;
+  font-size: 9.5px;
+  font-weight: 800;
+  text-align: center;
+}
+.revision-source-link:hover { background: #F0EDFF; }
+
+.detail-date-grid > div:nth-child(1) { border-top: 3px solid #2BA7A0; }
+.detail-date-grid > div:nth-child(2) { border-top: 3px solid #F09A3E; }
+.detail-date-grid > div:nth-child(3) { border-top: 3px solid #42A62A; }
+.detail-date-grid > div:nth-child(4) { border-top: 3px solid #E25C5C; }
+
+@media (max-width: 900px) {
+  .revision-event-main {
+    padding: 16px 16px 54px 18px;
+    grid-template-columns: 100px minmax(0, 1fr);
+  }
+  .revision-event-source { grid-column: 2; }
+  .revision-source-link { left: 118px; right: auto; bottom: 12px; top: auto; transform: none; max-width: calc(100% - 138px); }
+}
+
+@media (max-width: 620px) {
+  .revision-legend { justify-content: flex-start; }
+  .revision-event-main { grid-template-columns: 1fr; padding: 15px 15px 54px 17px; gap: 9px; }
+  .revision-event-date { grid-template-columns: auto 1fr; align-items: baseline; gap: 8px; }
+  .revision-event-source { grid-column: 1; }
+  .revision-source-link { left: 17px; max-width: calc(100% - 34px); }
+}
+.legend-dot.administrative_notice { background: #2BA7A0; box-shadow: 4px 0 0 #7B6BE1; margin-right: 4px; }
+.event-administrative_notice { color: #0F766E; background: #E6F4F1; }
+.event-legislative_notice { color: #6D5BD0; background: #F0EDFF; }
+.day-event-card.event-border-administrative_notice { border-left-color: #2BA7A0; }
+.day-event-card.event-border-legislative_notice { border-left-color: #7B6BE1; }
+.detail-source-caption { display: inline-block; margin-top: 7px; color: #858F8A; font-size: 10px; }
+.source-verification-section { border-left: 4px solid #7B6BE1; }

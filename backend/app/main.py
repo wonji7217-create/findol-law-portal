@@ -24,7 +24,7 @@ from .search_engine import (
 )
 
 
-app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="5.9.0")
+app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="6.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,7 +38,7 @@ def on_startup():
     init_db()
     db = SessionLocal()
     try:
-        storage.backfill_archive_from_snapshots(db)
+        # 검색 스냅샷은 아카이브와 분리합니다. 공식 동기화/관리자 등록 자료만 개정이력에 사용합니다.
         storage.seed_knowledge_topics(db, LAW_MAP_PATH)
     finally:
         db.close()
@@ -50,7 +50,7 @@ def health(db: Session = Depends(get_db)):
     return {
         "status": "ok",
         "service": "findol 화학법령 검색·개정 아카이브",
-        "version": "5.9.0",
+        "version": "6.0.0",
         "archive_count": stats["total"],
         "lawmaking_api_configured": lawmaking_api.configured(),
     }
@@ -275,6 +275,33 @@ def archive_stats(
     db: Session = Depends(get_db),
 ):
     return storage.get_archive_stats(db, recent_limit, upcoming_limit)
+
+
+@app.get("/api/revision-events")
+def revision_events(
+    keyword: str | None = Query(None),
+    event_type: str | None = Query(None),
+    year: int | None = Query(None, ge=2000, le=2100),
+    task: str | None = Query(None),
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """검색어와 독립된 개정 이벤트 타임라인. 행정예고·입법예고·공포·시행·마감을 날짜순으로 반환한다."""
+    return storage.get_revision_events(
+        db,
+        keyword=keyword,
+        event_type=event_type,
+        year=year,
+        task=task,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get("/api/revision-events/stats")
+def revision_event_stats(db: Session = Depends(get_db)):
+    return storage.get_revision_event_stats(db)
 
 
 @app.get("/api/archive")
