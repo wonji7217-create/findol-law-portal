@@ -8,7 +8,7 @@
 <meta content="화관법 법령 검색, 개정 아카이브, 시행일 캘린더를 제공하는 findol" name="description"/>
 <title>findol | 환경·화학·안전 규정 실무검색</title>
 <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" rel="stylesheet"/>
-<link href="style.css?v=5.9" rel="stylesheet"/>
+<link href="style.css?v=6.1" rel="stylesheet"/>
 </head>
 <body>
 <header class="site-header">
@@ -19,6 +19,7 @@
 </a>
 <nav aria-label="주요 메뉴" class="main-nav">
 <button class="nav-tab is-active" data-tab="search" type="button">규정검색</button>
+<button class="nav-tab" data-tab="lawguide" type="button">법령·고시 정리</button>
 <button class="nav-tab" data-tab="substances" type="button">물질검색</button>
 <button class="nav-tab" data-tab="archive" type="button">개정 아카이브</button>
 <button class="nav-tab" data-tab="calendar" type="button">개정 캘린더</button>
@@ -36,6 +37,7 @@
 </div>
 <nav aria-label="모바일 메뉴" class="mobile-nav" id="mobileNav">
 <button class="nav-tab is-active" data-tab="search" type="button">규정검색</button>
+<button class="nav-tab" data-tab="lawguide" type="button">법령·고시 정리</button>
 <button class="nav-tab" data-tab="substances" type="button">물질검색</button>
 <button class="nav-tab" data-tab="archive" type="button">개정 아카이브</button>
 <button class="nav-tab" data-tab="calendar" type="button">개정 캘린더</button>
@@ -90,6 +92,10 @@
 <button class="service-card" data-search-focus="" type="button">
 <span class="service-icon"><svg viewbox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Z" fill="none" stroke="currentColor" stroke-width="1.7"></path><path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5A2.5 2.5 0 0 1 4 18.5" fill="none" stroke="currentColor" stroke-width="1.7"></path></svg></span>
 <span><strong>규정검색</strong><small>실무 표현으로 빠르게 검색</small></span><i>›</i>
+</button>
+<button class="service-card law-guide-service" data-tab-link="lawguide" type="button">
+<span class="service-icon"><svg viewbox="0 0 24 24"><path d="M5 4h6v16H5V4Zm8 0h6v16h-6V4Z" fill="none" stroke="currentColor" stroke-width="1.7"></path><path d="M7.5 8h1M7.5 12h1M15.5 8h1M15.5 12h1" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"></path></svg></span>
+<span><strong>법령·고시 정리</strong><small>법→시행령→시행규칙→고시 한눈에</small></span><i>›</i>
 </button>
 <button class="service-card material-service" data-tab-link="substances" type="button">
 <span class="service-icon"><svg viewbox="0 0 24 24"><path d="M9 3h6v4l4.5 8.1A4 4 0 0 1 16 21H8a4 4 0 0 1-3.5-5.9L9 7V3Z" fill="none" stroke="currentColor" stroke-width="1.7"></path><path d="M7.5 14h9M10 3h4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7"></path></svg></span>
@@ -245,6 +251,48 @@
 </section>
 </section>
 
+<section class="panel" id="panel-lawguide">
+<section class="law-guide-hero">
+<div>
+<span class="kicker">LEGAL MAP</span>
+<h1>화관법 법령·고시를<br/><span>업무 기준으로 한눈에</span></h1>
+<p>검색 결과와 별개로, 자주 하는 업무를 기준으로 상위 법령 → 핵심 고시 → 함께 확인할 규정을 정리합니다. 필요한 주제를 고르면 어떤 규정을 왜 봐야 하는지 바로 확인할 수 있습니다.</p>
+</div>
+<aside class="law-guide-meta">
+<span class="mini-label">LAW MAP</span>
+<strong>법령·고시 정리표</strong>
+<dl>
+<div><dt>기준일</dt><dd id="lawGuideVerified">-</dd></div>
+<div><dt>업무 주제</dt><dd id="lawGuideCount">-</dd></div>
+</dl>
+<p>개정 여부와 최종 적용은 공식 원문에서 다시 확인합니다.</p>
+</aside>
+</section>
+
+<section class="law-guide-browser">
+<div class="law-guide-toolbar">
+<div><span class="plan-label">업무 주제 찾기</span><h2>무슨 일을 하려는지부터 고르세요</h2></div>
+<label class="law-guide-search"><span class="sr-only">법령·고시 정리 검색</span><input id="lawGuideSearch" type="search" placeholder="예: 저장시설, 설치검사, 변경신고, 화학사고예방"/></label>
+</div>
+<div class="law-guide-layout">
+<aside class="law-topic-panel">
+<div class="law-topic-list" id="lawTopicList"><div class="loading-row">법령·고시 정리표를 불러오는 중...</div></div>
+</aside>
+<section class="law-guide-detail" id="lawGuideDetail">
+<div class="law-guide-empty">
+<strong>업무 주제를 선택해 주세요.</strong>
+<p>선택한 업무의 상위 법령, 핵심 고시, 관련 규정과 실무 확인사항을 순서대로 보여줍니다.</p>
+</div>
+</section>
+</div>
+</section>
+
+<section class="law-guide-note">
+<strong>정리표와 개정 아카이브는 역할이 다릅니다.</strong>
+<p>이 화면은 “무슨 규정을 봐야 하는지”를 정리하고, 각 규정의 <b>개정이력 보기</b>를 누르면 행정예고·입법예고·공포·시행 이력을 아카이브에서 확인합니다.</p>
+</section>
+</section>
+
 <section class="panel" id="panel-substances">
 <section class="substance-page-hero">
 <div class="substance-page-copy">
@@ -355,6 +403,6 @@
 </article>
 </div>
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
-<script src="script.js?v=5.9"></script>
+<script src="script.js?v=6.1"></script>
 </body>
 </html>

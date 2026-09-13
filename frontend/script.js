@@ -10,6 +10,9 @@ const ARCHIVE_LIMIT = 20;
 let archiveTotal = 0;
 let calendarEvents = [];
 let selectedCalendarDate = null;
+let lawGuideLoaded = false;
+let lawGuideTopics = [];
+let selectedLawGuideKey = null;
 
 function getFindolSessionId() {
   const key = "findol-search-session";
@@ -79,6 +82,7 @@ function emptyState(title, description = "") {
 const navTabs = document.querySelectorAll(".nav-tab");
 const panels = {
   search: $("panel-search"),
+  lawguide: $("panel-lawguide"),
   substances: $("panel-substances"),
   archive: $("panel-archive"),
   calendar: $("panel-calendar"),
@@ -90,6 +94,7 @@ function activateTab(tabName) {
   $("mobileNav").classList.remove("is-open");
   $("mobileMenuButton").setAttribute("aria-expanded", "false");
 
+  if (tabName === "lawguide") loadLawGuide();
   if (tabName === "substances") loadSubstanceMeta();
   if (tabName === "archive") loadArchive(true);
   if (tabName === "calendar") loadCalendar();
@@ -695,6 +700,144 @@ function renderMonthEvents() {
   bindArchiveOpenButtons();
 }
 
+
+// -----------------------------------------------------------------------------
+// 법령·고시 정리 — 검색과 분리된 업무별 법령지도
+// -----------------------------------------------------------------------------
+async function loadLawGuide(force = false) {
+  if (lawGuideLoaded && !force) return;
+  const list = $("lawTopicList");
+  const detail = $("lawGuideDetail");
+  if (!list || !detail) return;
+  list.innerHTML = `<div class="loading-row">법령·고시 정리표를 불러오는 중...</div>`;
+  detail.innerHTML = `<div class="law-guide-empty"><strong>정리표를 불러오고 있어요.</strong><p>잠시만 기다려 주세요.</p></div>`;
+  try {
+    const response = await fetch(`${API_BASE}/api/law-guide`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || `서버 오류 (${response.status})`);
+    lawGuideTopics = data.topics || [];
+    lawGuideLoaded = true;
+    $("lawGuideVerified").textContent = data.verified_on ? data.verified_on.replaceAll("-", ".") : "확인 필요";
+    $("lawGuideCount").textContent = `${lawGuideTopics.length}개`;
+    renderLawTopicList(lawGuideTopics);
+    const target = lawGuideTopics.find((item) => item.topic_key === selectedLawGuideKey) || lawGuideTopics[0];
+    if (target) selectLawGuideTopic(target.topic_key);
+    else detail.innerHTML = emptyState("등록된 법령·고시 주제가 없어요.", "관리자 지식주제에서 업무별 규정을 등록해 주세요.");
+  } catch (error) {
+    list.innerHTML = emptyState("정리표를 불러오지 못했어요.", error.message);
+    detail.innerHTML = emptyState("법령·고시 정보를 불러오지 못했어요.", error.message);
+  }
+}
+
+function renderLawTopicList(items) {
+  const list = $("lawTopicList");
+  if (!items.length) {
+    list.innerHTML = emptyState("일치하는 업무 주제가 없어요.", "다른 업무명이나 규정명으로 검색해 보세요.");
+    return;
+  }
+  list.innerHTML = items.map((item, index) => {
+    const count = (item.upper_laws || []).length + (item.primary_rules || []).length + (item.related_rules || []).length;
+    return `<button class="law-topic-item ${item.topic_key === selectedLawGuideKey ? "is-active" : ""}" type="button" data-law-topic="${escapeHtml(item.topic_key)}">
+      <span class="law-topic-number">${String(index + 1).padStart(2, "0")}</span>
+      <span class="law-topic-copy"><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.intent_summary || item.description || "관련 법령·고시 정리")}</small></span>
+      <span class="law-topic-count">${count}</span>
+    </button>`;
+  }).join("");
+  list.querySelectorAll("[data-law-topic]").forEach((button) => {
+    button.addEventListener("click", () => selectLawGuideTopic(button.dataset.lawTopic));
+  });
+}
+
+function selectLawGuideTopic(topicKey) {
+  const topic = lawGuideTopics.find((item) => item.topic_key === topicKey);
+  if (!topic) return;
+  selectedLawGuideKey = topicKey;
+  $("lawTopicList")?.querySelectorAll("[data-law-topic]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.lawTopic === topicKey);
+  });
+  renderLawGuideDetail(topic);
+}
+
+function renderLawGuideRule(rule, group) {
+  const groupLabel = group === "upper" ? "상위 법령" : group === "core" ? "핵심 고시·규정" : "함께 확인";
+  const kindLabel = rule.kind === "law" ? "법령" : "고시·행정규칙";
+  const official = rule.official_url
+    ? `<a class="law-rule-action primary" href="${escapeHtml(rule.official_url)}" target="_blank" rel="noopener">공식 원문 ↗</a>`
+    : `<span class="law-rule-action disabled">원문 링크 확인 필요</span>`;
+  return `<article class="law-rule-card law-rule-${group}">
+    <div class="law-rule-head"><span class="law-rule-group">${groupLabel}</span><span class="law-rule-kind">${kindLabel}</span></div>
+    <h4>${escapeHtml(rule.title || "규정명 확인 필요")}</h4>
+    <p>${escapeHtml(rule.role || rule.note || "")}</p>
+    <div class="law-rule-meta"><span>${escapeHtml(rule.department || "소관기관 확인 필요")}</span>${rule.note ? `<small>${escapeHtml(rule.note)}</small>` : ""}</div>
+    <div class="law-rule-actions">${official}<button type="button" class="law-rule-action history" data-law-history="${escapeHtml(rule.title || "")}">개정이력 보기</button></div>
+  </article>`;
+}
+
+function renderLawGuideDetail(topic) {
+  const upper = topic.upper_laws || [];
+  const core = topic.primary_rules || [];
+  const related = topic.related_rules || [];
+  const checklist = topic.checklist || [];
+  const detail = $("lawGuideDetail");
+  detail.innerHTML = `<div class="law-guide-detail-head">
+      <div><span class="plan-label">${escapeHtml(topic.topic_key)}</span><h2>${escapeHtml(topic.label)}</h2><p>${escapeHtml(topic.intent_summary || topic.description || "관련 규정을 업무 순서대로 확인합니다.")}</p></div>
+      <button class="secondary-button" type="button" data-search-from-guide="${escapeHtml(topic.label)}">이 주제로 규정검색</button>
+    </div>
+    <section class="law-flow-section">
+      <div class="law-flow-title"><span>1</span><div><small>LEGAL HIERARCHY</small><h3>상위 법령</h3></div></div>
+      <div class="law-rule-grid">${upper.length ? upper.map((rule) => renderLawGuideRule(rule, "upper")).join("") : `<div class="soft-empty">등록된 상위 법령이 없습니다.</div>`}</div>
+    </section>
+    <section class="law-flow-section core">
+      <div class="law-flow-title"><span>2</span><div><small>MUST CHECK</small><h3>핵심 고시·규정</h3></div></div>
+      <div class="law-rule-grid">${core.length ? core.map((rule) => renderLawGuideRule(rule, "core")).join("") : `<div class="soft-empty">등록된 핵심 고시가 없습니다.</div>`}</div>
+    </section>
+    <section class="law-flow-section">
+      <div class="law-flow-title"><span>3</span><div><small>CROSS CHECK</small><h3>함께 확인할 규정</h3></div></div>
+      <div class="law-rule-grid">${related.length ? related.map((rule) => renderLawGuideRule(rule, "related")).join("") : `<div class="soft-empty">추가로 연결된 규정이 없습니다.</div>`}</div>
+    </section>
+    <section class="law-check-section">
+      <div><span class="plan-label">PRACTICAL CHECK</span><h3>실무에서 먼저 확인할 것</h3></div>
+      ${checklist.length ? `<ol>${checklist.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>` : `<div class="soft-empty">등록된 체크리스트가 없습니다.</div>`}
+    </section>`;
+
+  detail.querySelectorAll("[data-law-history]").forEach((button) => {
+    button.addEventListener("click", () => openLawHistoryFromGuide(button.dataset.lawHistory));
+  });
+  detail.querySelectorAll("[data-search-from-guide]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activateTab("search");
+      const input = $("search-input");
+      input.value = button.dataset.searchFromGuide || topic.label;
+      input.focus();
+      document.querySelector("#search-form")?.requestSubmit();
+    });
+  });
+}
+
+function openLawHistoryFromGuide(title) {
+  activateTab("archive");
+  const keyword = $("archiveKeyword");
+  if (keyword) keyword.value = title || "";
+  setTimeout(() => loadArchive(true), 0);
+}
+
+$("lawGuideSearch")?.addEventListener("input", (event) => {
+  const keyword = event.target.value.trim().toLowerCase();
+  const filtered = !keyword ? lawGuideTopics : lawGuideTopics.filter((item) => {
+    const haystack = [
+      item.label,
+      item.intent_summary,
+      ...(item.triggers || []),
+      ...(item.search_terms || []),
+      ...(item.upper_laws || []).map((rule) => rule.title),
+      ...(item.primary_rules || []).map((rule) => rule.title),
+      ...(item.related_rules || []).map((rule) => rule.title),
+    ].join(" ").toLowerCase();
+    return haystack.includes(keyword);
+  });
+  renderLawTopicList(filtered);
+  if (filtered.length) selectLawGuideTopic(filtered[0].topic_key);
+});
 
 // -----------------------------------------------------------------------------
 // 물질검색 — 엑셀 현행자료 + 별도 개정·행정예고 이벤트

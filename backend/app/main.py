@@ -24,7 +24,7 @@ from .search_engine import (
 )
 
 
-app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="6.0.0")
+app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="6.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,10 +50,63 @@ def health(db: Session = Depends(get_db)):
     return {
         "status": "ok",
         "service": "findol 화학법령 검색·개정 아카이브",
-        "version": "6.0.0",
+        "version": "6.1.0",
         "archive_count": stats["total"],
         "lawmaking_api_configured": lawmaking_api.configured(),
     }
+
+
+@app.get("/api/law-guide")
+def law_guide(
+    q: str | None = Query(None, description="업무 주제·법령·고시명 필터"),
+    db: Session = Depends(get_db),
+):
+    """검색과 분리된 화관법 법령·고시 정리표를 제공한다.
+
+    관리자 지식주제 DB를 기준으로 상위 법령 → 핵심 고시 → 함께 확인할 규정
+    순서를 그대로 반환한다. 검색어는 이 정리표를 좁혀보는 용도로만 사용한다.
+    """
+    topics = [item for item in storage.list_knowledge_topics(db) if item.get("is_active", True)]
+
+    keyword = (q or "").strip().lower()
+    if keyword:
+        def matches(item: dict) -> bool:
+            haystack = [
+                item.get("label", ""),
+                item.get("description", ""),
+                item.get("intent_summary", ""),
+                *item.get("triggers", []),
+                *item.get("search_terms", []),
+            ]
+            for group in ("upper_laws", "primary_rules", "related_rules"):
+                for rule in item.get(group, []):
+                    haystack.extend([
+                        rule.get("title", ""),
+                        rule.get("role", ""),
+                        rule.get("department", ""),
+                        rule.get("note", ""),
+                    ])
+            return keyword in " ".join(str(value or "") for value in haystack).lower()
+
+        topics = [item for item in topics if matches(item)]
+
+    meta = {
+        "version": "",
+        "verified_on": "",
+        "notice": "법령·고시 정리표는 탐색용입니다. 실제 적용 전 최신 공식 원문을 확인하세요.",
+    }
+    try:
+        import json
+        source = json.loads(Path(LAW_MAP_PATH).read_text(encoding="utf-8"))
+        meta.update({
+            "version": source.get("version", ""),
+            "verified_on": source.get("verified_on", ""),
+            "notice": source.get("notice") or meta["notice"],
+        })
+    except Exception:
+        pass
+
+    return {**meta, "total": len(topics), "topics": topics}
 
 
 async def _search_terms(
