@@ -107,7 +107,10 @@ def test_archive_payload_does_not_expose_oc():
         "attachments": [],
     }
     payload = lawmaking_api.to_archive_payload(item)
-    assert payload["official_url"] == "https://www.lawmaking.go.kr"
+    assert payload["official_url"] == (
+        "https://opinion.lawmaking.go.kr/gcom/admpp/47054"
+        "?announceType=TYPE6&mappingAdmRulSeq=2000000329212"
+    )
     assert "OC=" not in payload["official_url"]
     assert payload["deadline_date"] == "2026. 8. 12."
     assert "행정예고" in payload["material_type"]
@@ -132,3 +135,13 @@ def test_normalize_admrul_results_keeps_enforcement_date():
     [item] = law_api.normalize_admrul_results(raw)
     assert item["promulgation_date"] == "20260616"
     assert item["enforcement_date"] == "20260701"
+
+
+def test_public_detail_url_for_legislative_notice():
+    item = {
+        "kind": "legislative_notice",
+        "seq": "88352",
+        "mapping_id": "2000000000000",
+        "announce_type": "TYPE5",
+    }
+    assert lawmaking_api.public_detail_url(item) == "https://opinion.lawmaking.go.kr/gcom/ogLmPp/88352"

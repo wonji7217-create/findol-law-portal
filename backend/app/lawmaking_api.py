@@ -19,7 +19,7 @@ from html.parser import HTMLParser
 import os
 import re
 from typing import Iterable
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlencode, urlparse, urlunparse
 from xml.etree import ElementTree as ET
 
 import httpx
@@ -27,7 +27,8 @@ import httpx
 BASE_URL = "https://www.lawmaking.go.kr"
 ADMIN_LIST_URL = f"{BASE_URL}/rest/ptcpAdmPp.xml"
 LEGISLATIVE_LIST_URL = f"{BASE_URL}/rest/ogLmPp.xml"
-PUBLIC_HOME_URL = BASE_URL
+PUBLIC_SITE_URL = "https://opinion.lawmaking.go.kr"
+PUBLIC_HOME_URL = PUBLIC_SITE_URL
 
 DEFAULT_AGENCIES = (
     "기후에너지환경부",
@@ -343,6 +344,32 @@ async def collect_candidates(
             detailed.append(detail)
     return detailed
 
+
+
+def public_detail_url(item: dict) -> str:
+    """국민참여입법센터의 사용자용 개별 게시글 상세 URL을 만든다.
+
+    정보공개 API 상세 주소에는 OC 인증값이 필요하므로 사용자에게 노출하지 않는다.
+    대신 국민참여입법센터의 공개 상세 페이지를 사용한다.
+    """
+    seq = str(item.get("seq") or "").strip()
+    if not seq:
+        return PUBLIC_HOME_URL
+
+    if item.get("kind") == "administrative_notice":
+        base = f"{PUBLIC_SITE_URL}/gcom/admpp/{seq}"
+        query = {}
+        if item.get("announce_type"):
+            query["announceType"] = item["announce_type"]
+        if item.get("mapping_id"):
+            query["mappingAdmRulSeq"] = item["mapping_id"]
+        return f"{base}?{urlencode(query)}" if query else base
+
+    if item.get("kind") == "legislative_notice":
+        return f"{PUBLIC_SITE_URL}/gcom/ogLmPp/{seq}"
+
+    return PUBLIC_HOME_URL
+
 def _summary_from_body(body_text: str | None, limit: int = 700) -> str:
     text = re.sub(r"\s+", " ", body_text or "").strip()
     if not text:
@@ -395,8 +422,8 @@ def to_archive_payload(item: dict) -> dict:
         "material_type": material_type or notice_label,
         "department": item.get("department"),
         "source_name": "국민참여입법센터",
-        # 인증값이 포함된 상세 API 주소는 외부에 저장하지 않는다.
-        "official_url": PUBLIC_HOME_URL,
+        # API 상세 URL(OC 필요)이 아니라 공개 웹의 개별 게시글 상세 URL을 저장한다.
+        "official_url": public_detail_url(item),
         "source_query": ", ".join(_matched_tags(item)),
         "published_date": item.get("notice_date") or item.get("start_date"),
         "deadline_date": item.get("end_date"),
