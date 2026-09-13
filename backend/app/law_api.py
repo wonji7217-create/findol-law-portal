@@ -53,6 +53,20 @@ def _get_oc() -> str:
     return os.getenv("LAW_API_OC", "")
 
 
+
+
+def configured() -> bool:
+    return bool((_get_oc() or "").strip())
+
+
+def make_public_detail_url(detail_link: str | None) -> str | None:
+    if not detail_link:
+        return None
+    value = str(detail_link).strip()
+    if value.startswith("http://") or value.startswith("https://"):
+        return value
+    return f"https://www.law.go.kr{value}"
+
 async def search_law(query: str, display: int = 20, page: int = 1) -> dict:
     """
     법령 검색 (target=law)

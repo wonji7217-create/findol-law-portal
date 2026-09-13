@@ -357,26 +357,26 @@
 </div>
 <form class="filter-panel" id="archiveFilterForm">
 <label class="filter-search"><span class="sr-only">아카이브 검색</span><input id="archiveKeyword" placeholder="제목, 기관, 업무 키워드로 이력 좁혀보기" type="search"/></label>
-<select aria-label="이력 유형" id="archiveEventType"><option value="all">전체 이력</option><option value="administrative_notice">행정예고</option><option value="legislative_notice">입법예고</option><option value="promulgated">공포</option><option value="effective">시행</option><option value="deadline">의견마감</option><option value="published">기타 게시</option></select>
+<select aria-label="이력 유형" id="archiveEventType"><option value="all">전체 이력</option><option value="administrative_notice">행정예고</option><option value="legislative_notice">입법예고</option><option value="promulgated">공포·발령</option><option value="effective">시행</option><option value="deadline">의견마감</option><option value="published">기타 게시</option></select>
 <select aria-label="연도" id="archiveYear"><option value="">전체 연도</option></select>
 <select aria-label="관련 업무" id="archiveTask"><option value="">전체 업무</option><option>제조·사용시설</option><option>저장시설</option><option>보관시설</option><option>소량취급시설</option><option>검사·안전진단</option><option>배관·누출</option><option>영업허가·변경</option><option>화학사고예방</option><option>차량 운반시설</option><option>차량 운송시설</option><option>운반용기</option><option>사외배관</option><option>안전거리</option><option>교육·관리자</option></select>
 <button class="primary-button" type="submit">조회</button>
 <button class="secondary-button" id="archiveReset" type="button">초기화</button>
 </form>
-<div class="archive-toolbar"><p id="archiveResultSummary">최근 개정 이력을 불러오는 중입니다.</p><div class="view-hint revision-legend"><span class="event-key key-administrative_notice">행정예고</span><span class="event-key key-legislative_notice">입법예고</span><span class="event-key key-promulgated">공포</span><span class="event-key key-effective">시행</span><span class="event-key key-deadline">의견마감</span></div></div>
+<div class="archive-toolbar"><p id="archiveResultSummary">최근 개정 이력을 불러오는 중입니다.</p><div class="view-hint revision-legend"><span class="event-key key-administrative_notice">행정예고</span><span class="event-key key-legislative_notice">입법예고</span><span class="event-key key-promulgated">공포·발령</span><span class="event-key key-effective">시행</span><span class="event-key key-deadline">의견마감</span></div></div>
 <div class="archive-list revision-event-list" id="archiveList"></div>
 <button class="load-more" hidden="" id="archiveLoadMore" type="button">더 보기</button>
 </section>
 <section class="panel" id="panel-calendar">
 <div class="page-hero compact-page-hero calendar-page-head">
-<div><span class="kicker">REVISION CALENDAR</span><h1>개정 캘린더</h1><p>하나의 아카이브 게시글에서 게시일·공포일·시행일·의견제출 마감일을 자동으로 달력에 표시합니다.</p></div>
+<div><span class="kicker">REVISION CALENDAR</span><h1>개정 캘린더</h1><p>국민참여입법센터의 공고·예고기간과 국가법령정보센터의 공포·발령·시행일을 기준으로 표시합니다. findol이 가져온 날짜는 일정으로 사용하지 않습니다.</p></div>
 <button class="secondary-button" id="calToday" type="button">오늘</button>
 </div>
 <div class="calendar-filter-bar">
 <div class="calendar-controls"><button aria-label="이전 달" class="cal-nav-btn" id="cal-prev">‹</button><strong class="cal-label" id="cal-label"></strong><button aria-label="다음 달" class="cal-nav-btn" id="cal-next">›</button></div>
 <div aria-label="표시 날짜 종류" class="calendar-checks">
 <label><input checked="" data-event-type="published" type="checkbox"/><i class="legend-dot administrative_notice"></i>예고 게시</label>
-<label><input checked="" data-event-type="promulgated" type="checkbox"/><i class="legend-dot promulgated"></i>공포일</label>
+<label><input checked="" data-event-type="promulgated" type="checkbox"/><i class="legend-dot promulgated"></i>공포·발령</label>
 <label><input checked="" data-event-type="effective" type="checkbox"/><i class="legend-dot effective"></i>시행일</label>
 <label><input checked="" data-event-type="deadline" type="checkbox"/><i class="legend-dot deadline"></i>의견마감</label>
 </div>
@@ -403,6 +403,6 @@
 </article>
 </div>
 <div aria-live="polite" class="toast" id="toast" role="status"></div>
-<script src="script.js?v=6.1"></script>
+<script src="script.js?v=6.2"></script>
 </body>
 </html>

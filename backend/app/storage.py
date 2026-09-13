@@ -246,7 +246,9 @@ def _create_archive_from_snapshot(
     if db.query(models.ArchiveEntry).filter(models.ArchiveEntry.archive_key == key).first():
         return False
 
-    published_date = fetched_at.strftime("%Y%m%d")
+    # 검색 결과를 가져온 시각은 공식 게시일이 아니다.
+    # 검색 스냅샷은 수집일을 캘린더 날짜로 사용하지 않는다.
+    published_date = None
     entry = models.ArchiveEntry(
         archive_key=key,
         kind=kind,
@@ -546,6 +548,7 @@ def _revision_events_for_entry(entry: models.ArchiveEntry) -> list[dict]:
             "material_type": entry.material_type,
             "department": entry.department,
             "source_name": entry.source_name,
+            "date_basis": _calendar_date_basis(entry, code),
             "official_url": entry.official_url,
             "published_date": entry.published_date,
             "promulgation_date": entry.promulgation_date,
@@ -560,7 +563,8 @@ def _revision_events_for_entry(entry: models.ArchiveEntry) -> list[dict]:
     if entry.published_date:
         code, label = _published_event(entry)
         add(code, label, entry.published_date)
-    add("promulgated", "공포", entry.promulgation_date)
+    promulgation_label = "발령" if entry.kind == "admin_rule" else "공포"
+    add("promulgated", promulgation_label, entry.promulgation_date)
     add("effective", "시행", entry.enforcement_date)
     add("deadline", "의견마감", entry.deadline_date)
     return events
@@ -638,7 +642,9 @@ def get_archive_stats(db: Session, recent_limit: int = 5, upcoming_limit: int = 
     """홈 대시보드용 통계. 검색 스냅샷이 아니라 공식/수동 수집 자료만 사용한다."""
     today = _today_yyyymmdd()
     rows = _latest_official_archive_entries(db)
-    rows.sort(key=lambda row: ((row.published_date or ""), row.collected_at or datetime.min), reverse=True)
+    def latest_official_date(row):
+        return max(filter(None, [row.published_date, row.promulgation_date, row.enforcement_date, row.deadline_date]), default="")
+    rows.sort(key=lambda row: (latest_official_date(row), row.collected_at or datetime.min), reverse=True)
     recent_rows = rows[:recent_limit] if recent_limit else []
 
     def next_event(row):
@@ -691,7 +697,9 @@ def import_archive_entry(db: Session, payload: dict) -> tuple[dict, bool]:
         "source_name": payload.get("source_name") or payload.get("department"),
         "official_url": payload.get("official_url"),
         "source_query": payload.get("source_query"),
-        "published_date": normalize_date(payload.get("published_date")) or _today_yyyymmdd(),
+        # 공식 날짜가 없는 자료는 달력에 표시하지 않는다.
+        # findol 수집일을 원문 게시일로 대체하지 않는다.
+        "published_date": normalize_date(payload.get("published_date")),
         "promulgation_date": normalize_date(payload.get("promulgation_date")),
         "enforcement_date": normalize_date(payload.get("enforcement_date")),
         "deadline_date": normalize_date(payload.get("deadline_date")),
@@ -737,6 +745,24 @@ def import_archive_entry(db: Session, payload: dict) -> tuple[dict, bool]:
     db.commit()
     db.refresh(entry)
     return _serialize_archive(entry), True
+
+
+def _calendar_date_basis(entry: models.ArchiveEntry, event_code: str) -> str:
+    """캘린더 날짜가 어떤 공식 값에서 왔는지 설명한다.
+
+    collected_at은 어떤 경우에도 일정 날짜의 근거로 사용하지 않는다.
+    """
+    if event_code in {"administrative_notice", "legislative_notice", "published"}:
+        if entry.source_name == "국민참여입법센터":
+            return "국민참여입법센터 공고일/예고일"
+        return "공식 원문 게시일"
+    if event_code == "promulgated":
+        return "국가법령정보센터 공포·발령일"
+    if event_code == "effective":
+        return "국가법령정보센터 시행일"
+    if event_code == "deadline":
+        return "국민참여입법센터 의견제출 종료일"
+    return "공식 원문 날짜"
 
 
 def get_calendar_events(
@@ -789,6 +815,7 @@ def get_calendar_events(
                 "material_type": entry.material_type,
                 "department": entry.department,
                 "source_name": entry.source_name,
+                "date_basis": _calendar_date_basis(entry, event_code),
                 "status": _status_for(entry),
                 "official_url": entry.official_url,
                 "tags": _json_loads(entry.tags_json),

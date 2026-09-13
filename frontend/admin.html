@@ -52,6 +52,20 @@
         <div id="syncStatus" class="sync-status">API 연결 상태를 확인하는 중입니다.</div>
       </section>
 
+
+      <section class="sync-panel" aria-labelledby="lawgoSyncTitle">
+        <div>
+          <p class="eyebrow">LAW.GO.KR API</p>
+          <h2 id="lawgoSyncTitle">법제처 공식 일정 동기화</h2>
+          <p>법령·고시 정리표에 등록된 규정을 기준으로 국가법령정보센터의 공포·발령일과 시행일을 가져옵니다. 검색한 날짜나 findol 수집일은 캘린더 날짜로 사용하지 않습니다.</p>
+        </div>
+        <div class="sync-options">
+          <label class="sync-limit">최대 규정<input id="lawgoSyncLimit" type="number" min="1" max="80" value="40" /></label>
+          <button id="syncLawgoBtn" class="primary" type="button">공식 일정 가져오기</button>
+        </div>
+        <div id="lawgoSyncStatus" class="sync-status">법제처 API 연결 상태를 확인하는 중입니다.</div>
+      </section>
+
       <section class="manager-grid">
         <div class="list-panel">
           <div class="panel-head">
@@ -137,6 +151,6 @@
     </div>
   </template>
   <div id="toast" class="toast"></div>
-  <script src="admin.js?v=5.9"></script>
+  <script src="admin.js?v=6.2"></script>
 </body>
 </html>

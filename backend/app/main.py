@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from pathlib import Path
+from difflib import SequenceMatcher
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Query, HTTPException, Depends, Header
@@ -24,7 +26,7 @@ from .search_engine import (
 )
 
 
-app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="6.1.0")
+app = FastAPI(title="findol 환경지식·화학법령 플랫폼 API", version="6.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,7 +52,7 @@ def health(db: Session = Depends(get_db)):
     return {
         "status": "ok",
         "service": "findol 화학법령 검색·개정 아카이브",
-        "version": "6.1.0",
+        "version": "6.2.0",
         "archive_count": stats["total"],
         "lawmaking_api_configured": lawmaking_api.configured(),
     }
@@ -477,6 +479,156 @@ def _require_admin(x_admin_token: str | None = Header(None)):
     return True
 
 
+
+def _compact_rule_title(value: str | None) -> str:
+    return re.sub(r"[^0-9A-Za-z가-힣]", "", value or "").lower()
+
+
+def _official_calendar_targets(db: Session) -> list[dict]:
+    """법령·고시 정리표에 등록된 규정만 국가법령정보센터 일정 동기화 대상으로 사용한다."""
+    merged: dict[tuple[str, str], dict] = {}
+    for topic in storage.list_knowledge_topics(db):
+        if not topic.get("is_active", True):
+            continue
+        task_label = topic.get("label") or ""
+        for group in ("upper_laws", "primary_rules", "related_rules"):
+            for rule in topic.get(group, []):
+                title = str(rule.get("title") or "").strip()
+                if not title:
+                    continue
+                kind = rule.get("kind") or ("law" if group == "upper_laws" else "admin_rule")
+                key = (kind, title)
+                row = merged.setdefault(key, {
+                    "kind": kind,
+                    "title": title,
+                    "department": rule.get("department"),
+                    "official_url": rule.get("official_url"),
+                    "tasks": set(),
+                })
+                if task_label:
+                    row["tasks"].add(task_label)
+    return [
+        {**item, "tasks": sorted(item["tasks"])}
+        for item in merged.values()
+    ]
+
+
+def _best_official_match(title: str, results: list[dict]) -> dict | None:
+    if not results:
+        return None
+    target = _compact_rule_title(title)
+    exact = [item for item in results if _compact_rule_title(item.get("name")) == target]
+    if exact:
+        return exact[0]
+    scored: list[tuple[float, dict]] = []
+    for item in results:
+        name = _compact_rule_title(item.get("name"))
+        if not name:
+            continue
+        score = SequenceMatcher(None, target, name).ratio()
+        if target in name or name in target:
+            score += 0.15
+        scored.append((score, item))
+    if not scored:
+        return None
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return scored[0][1] if scored[0][0] >= 0.72 else None
+
+
+async def _sync_lawgo_calendar(db: Session, max_targets: int = 40) -> dict:
+    if not law_api.configured():
+        raise HTTPException(status_code=503, detail="LAW_API_OC 환경변수가 설정되지 않았습니다.")
+
+    targets = _official_calendar_targets(db)[:max(1, min(max_targets, 80))]
+    semaphore = asyncio.Semaphore(5)
+
+    async def fetch_one(target: dict):
+        async with semaphore:
+            try:
+                if target["kind"] == "law":
+                    raw = await law_api.search_law(target["title"], display=20, page=1)
+                    candidates = law_api.normalize_law_results(raw)
+                else:
+                    raw = await law_api.search_admrul(target["title"], display=20, page=1)
+                    candidates = law_api.normalize_admrul_results(raw)
+                return target, _best_official_match(target["title"], candidates), None
+            except Exception as exc:
+                return target, None, str(exc)
+
+    fetched = await asyncio.gather(*(fetch_one(target) for target in targets))
+    created = 0
+    unchanged = 0
+    unmatched = 0
+    errors: list[str] = []
+
+    for target, item, error in fetched:
+        if error:
+            errors.append(f"{target['title']}: {error}")
+            continue
+        if not item:
+            unmatched += 1
+            continue
+
+        official_url = law_api.make_public_detail_url(item.get("detail_link")) or target.get("official_url")
+        kind = target["kind"]
+        source_key = f"lawgo:{kind}:{item.get('id') or _compact_rule_title(item.get('name'))}"
+        if kind == "law":
+            material_type = "법령"
+            date_note = "국가법령정보센터의 공포일·시행일을 기준으로 표시합니다."
+        else:
+            material_type = item.get("type") or "행정규칙"
+            date_note = "국가법령정보센터의 발령일을 기준으로 표시합니다."
+
+        archived, was_created = storage.import_archive_entry(db, {
+            "source_key": source_key,
+            "kind": kind,
+            "external_id": str(item.get("id") or ""),
+            "title": item.get("name") or target["title"],
+            "material_type": material_type,
+            "department": item.get("department") or target.get("department"),
+            "source_name": "국가법령정보센터",
+            "official_url": official_url,
+            "source_query": target["title"],
+            # 검색한 날짜/수집한 날짜를 게시일로 넣지 않는다.
+            "published_date": None,
+            "promulgation_date": item.get("promulgation_date"),
+            "enforcement_date": item.get("enforcement_date"),
+            "summary": date_note,
+            "findol_note": "법령·고시 정리표에 등록된 규정을 국가법령정보센터 Open API로 확인한 공식 일정입니다.",
+            "tags": ["국가법령정보센터", "공식일정"],
+            "related_laws": [item.get("name") or target["title"]],
+            "related_tasks": target.get("tasks") or [],
+            "attachments": [],
+        })
+        if was_created:
+            created += 1
+        else:
+            unchanged += 1
+
+    return {
+        "targets": len(targets),
+        "matched": created + unchanged,
+        "created_or_changed": created,
+        "unchanged": unchanged,
+        "unmatched": unmatched,
+        "errors": errors[:10],
+    }
+
+
+class OfficialCalendarSyncPayload(BaseModel):
+    max_targets: int = Field(40, ge=1, le=80)
+
+
+@app.post("/api/admin/lawgo/sync")
+async def lawgo_calendar_sync(
+    payload: OfficialCalendarSyncPayload,
+    _: bool = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    """검색 이력과 무관하게 법령·고시 정리표를 기준으로 공포·발령·시행일을 동기화한다."""
+    return await _sync_lawgo_calendar(db, max_targets=payload.max_targets)
+
+
 class KnowledgeRule(BaseModel):
     title: str
     kind: str = "admin_rule"
@@ -511,6 +663,7 @@ def admin_summary(_: bool = Depends(_require_admin), db: Session = Depends(get_d
         "active_count": sum(1 for item in topics if item["is_active"]),
         "archive_count": storage.get_archive_stats(db, 0, 0)["total"],
         "lawmaking_api_configured": lawmaking_api.configured(),
+        "law_api_configured": law_api.configured(),
     }
 
 

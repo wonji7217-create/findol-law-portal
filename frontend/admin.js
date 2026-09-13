@@ -60,6 +60,14 @@ async function loadAll() {
     syncStatus.classList.toggle('warning',!summary.lawmaking_api_configured);
     $('#syncLawmakingBtn').disabled=!summary.lawmaking_api_configured;
   }
+  const lawgoStatus=$('#lawgoSyncStatus');
+  if (lawgoStatus) {
+    lawgoStatus.textContent=summary.law_api_configured
+      ? '법제처 Open API 인증값이 설정되어 있습니다. 공식 공포·발령·시행일을 동기화할 수 있습니다.'
+      : 'Render 환경변수 LAW_API_OC가 아직 설정되지 않았습니다.';
+    lawgoStatus.classList.toggle('warning',!summary.law_api_configured);
+    $('#syncLawgoBtn').disabled=!summary.law_api_configured;
+  }
   topics=list.items; renderList();
 }
 function payload() { return {topic_key:$('#topicKey').value.trim(),label:$('#labelInput').value.trim(),description:$('#descriptionInput').value.trim(),intent_summary:$('#intentInput').value.trim(),triggers:lines($('#triggersInput').value),search_terms:lines($('#searchTermsInput').value),primary_rules:getRules('#primaryRules'),upper_laws:getRules('#upperLaws'),related_rules:getRules('#relatedRules'),checklist:lines($('#checklistInput').value),related_tasks:lines($('#tasksInput').value),notes:$('#notesInput').value.trim(),is_active:$('#activeInput').checked,priority:Number($('#priorityInput').value||50)}; }
@@ -83,6 +91,22 @@ $('#syncLawmakingBtn').onclick=async()=>{
     await loadAll();
   }catch(err){status.textContent=err.message;status.classList.add('warning');}
   finally{btn.disabled=false;btn.textContent='새 정보 가져오기';}
+};
+
+
+$('#syncLawgoBtn').onclick=async()=>{
+  const btn=$('#syncLawgoBtn');
+  const status=$('#lawgoSyncStatus');
+  const payload={max_targets:Number($('#lawgoSyncLimit').value||40)};
+  btn.disabled=true; btn.textContent='가져오는 중...'; status.classList.remove('warning');
+  status.textContent='법령·고시 정리표의 규정을 국가법령정보센터에서 확인하고 있어요.';
+  try{
+    const result=await api('/api/admin/lawgo/sync',{method:'POST',body:JSON.stringify(payload)});
+    status.textContent=`대상 ${result.targets}건 · 공식 매칭 ${result.matched}건 · 신규/변경 ${result.created_or_changed}건 · 매칭 안 됨 ${result.unmatched}건`;
+    toast('법제처 공식 일정 동기화를 마쳤습니다.');
+    await loadAll();
+  }catch(err){status.textContent=err.message;status.classList.add('warning');}
+  finally{btn.disabled=false;btn.textContent='공식 일정 가져오기';}
 };
 
 $('#loginForm').addEventListener('submit',async e=>{e.preventDefault(); token=$('#tokenInput').value.trim(); try{await api('/api/admin/summary'); sessionStorage.setItem('findol_admin_token',token); $('#loginError').textContent=''; $('#loginDialog').close(); await loadAll();}catch(err){$('#loginError').textContent=err.message;}});

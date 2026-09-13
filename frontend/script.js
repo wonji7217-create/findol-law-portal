@@ -521,9 +521,9 @@ function renderRevisionEvent(item) {
   const code = revisionEventClass(item.event_code);
   const source = item.source_name || item.department || "출처 확인 필요";
   const isPostedEvent = ["administrative_notice", "legislative_notice", "published"].includes(code);
-  const originalPublished = item.published_date
-    ? (isPostedEvent ? "원문 게시" : `원문 게시 ${formatDate(item.published_date)}`)
-    : "원문 게시일 확인 필요";
+  const originalPublished = item.date_basis || (item.published_date
+    ? (isPostedEvent ? "공식 원문 게시일" : `원문 게시 ${formatDate(item.published_date)}`)
+    : "공식 날짜 기준");
   const materialBits = (item.material_type || "").split("·").map((value) => value.trim()).filter(Boolean);
   const subMeta = [item.department, ...materialBits.filter((value) => !value.includes("행정예고") && !value.includes("입법예고"))].filter(Boolean).slice(0, 3).join(" · ");
   return `<article class="revision-event-row event-border-${code}">
@@ -689,13 +689,15 @@ function resetDayPanel() {
 }
 
 function renderDayEvent(event) {
-  return `<button class="day-event-card event-border-${event.event_code}" type="button" data-archive-id="${event.archive_id}"><span class="event-key key-${event.event_code}">${event.event_type}</span><strong>${escapeHtml(event.title)}</strong><small>${escapeHtml(event.material_type || "")} · ${escapeHtml(event.department || "출처 확인 필요")}</small></button>`;
+  const source = event.source_name || "공식 출처 확인 필요";
+  const basis = event.date_basis || "공식 원문 날짜";
+  return `<button class="day-event-card event-border-${event.event_code}" type="button" data-archive-id="${event.archive_id}"><span class="event-key key-${event.event_code}">${event.event_type}</span><strong>${escapeHtml(event.title)}</strong><small>${escapeHtml(event.material_type || "")} · ${escapeHtml(event.department || "")}</small><small>출처 ${escapeHtml(source)} · ${escapeHtml(basis)}</small></button>`;
 }
 
 function renderMonthEvents() {
   $("calendarEventCount").textContent = `${calendarEvents.length}건`;
   $("calendar-event-list").innerHTML = calendarEvents.length
-    ? calendarEvents.map((event) => `<button class="month-event-row" type="button" data-archive-id="${event.archive_id}"><time>${formatDate(event.date)}</time><span class="event-key key-${event.event_code}">${event.event_type}</span><span class="month-event-main"><strong>${escapeHtml(event.title)}</strong><small>${escapeHtml(event.material_type || "")} · ${escapeHtml(event.department || "")}</small></span></button>`).join("")
+    ? calendarEvents.map((event) => `<button class="month-event-row" type="button" data-archive-id="${event.archive_id}"><time>${formatDate(event.date)}</time><span class="event-key key-${event.event_code}">${event.event_type}</span><span class="month-event-main"><strong>${escapeHtml(event.title)}</strong><small>${escapeHtml(event.material_type || "")} · ${escapeHtml(event.department || "")}</small><small>출처 ${escapeHtml(event.source_name || "공식 출처 확인 필요")} · ${escapeHtml(event.date_basis || "공식 원문 날짜")}</small></span></button>`).join("")
     : emptyState("이번 달 일정이 없어요.", "표시 날짜 종류 또는 업무 필터를 변경해 보세요.");
   bindArchiveOpenButtons();
 }
