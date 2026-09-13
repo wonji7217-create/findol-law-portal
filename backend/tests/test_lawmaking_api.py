@@ -111,3 +111,24 @@ def test_archive_payload_does_not_expose_oc():
     assert "OC=" not in payload["official_url"]
     assert payload["deadline_date"] == "2026. 8. 12."
     assert "행정예고" in payload["material_type"]
+
+
+def test_normalize_admrul_results_keeps_enforcement_date():
+    from app import law_api
+
+    raw = {
+        "AdmRulSearch": {
+            "admrul": {
+                "행정규칙일련번호": "12345",
+                "행정규칙명": "유해화학물질 사외배관 이송시설 설치 및 관리에 관한 고시",
+                "행정규칙종류": "고시",
+                "발령일자": "20260616",
+                "시행일자": "20260701",
+                "소관부처명": "화학물질안전원",
+                "행정규칙상세링크": "/DRF/lawService.do?target=admrul&ID=12345",
+            }
+        }
+    }
+    [item] = law_api.normalize_admrul_results(raw)
+    assert item["promulgation_date"] == "20260616"
+    assert item["enforcement_date"] == "20260701"

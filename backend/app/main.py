@@ -577,7 +577,7 @@ async def _sync_lawgo_calendar(db: Session, max_targets: int = 40) -> dict:
             date_note = "국가법령정보센터의 공포일·시행일을 기준으로 표시합니다."
         else:
             material_type = item.get("type") or "행정규칙"
-            date_note = "국가법령정보센터의 발령일을 기준으로 표시합니다."
+            date_note = "국가법령정보센터의 발령일·시행일을 기준으로 표시합니다."
 
         archived, was_created = storage.import_archive_entry(db, {
             "source_key": source_key,

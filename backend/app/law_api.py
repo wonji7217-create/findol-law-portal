@@ -160,6 +160,7 @@ def normalize_admrul_results(raw: dict) -> list[dict]:
             "name": item.get("행정규칙명"),
             "type": item.get("행정규칙종류"),
             "promulgation_date": item.get("발령일자"),
+            "enforcement_date": item.get("시행일자"),
             "department": item.get("소관부처명"),
             "detail_link": item.get("행정규칙상세링크"),
         })
