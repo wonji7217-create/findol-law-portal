@@ -513,7 +513,7 @@ async function loadArchive(reset = false) {
 }
 
 function revisionEventClass(code = "published") {
-  const allowed = ["administrative_notice", "legislative_notice", "promulgated", "effective", "deadline", "published"];
+  const allowed = ["administrative_notice", "legislative_notice", "promulgated", "effective", "promulgated_effective", "deadline", "published"];
   return allowed.includes(code) ? code : "published";
 }
 
@@ -590,8 +590,19 @@ function renderArchiveDetail(item) {
   const eventBadges = [];
   if ((item.material_type || "").includes("행정예고")) eventBadges.push(`<span class="event-key key-administrative_notice">행정예고</span>`);
   if ((item.material_type || "").includes("입법예고")) eventBadges.push(`<span class="event-key key-legislative_notice">입법예고</span>`);
+  const samePromulgationAndEnforcement = Boolean(
+    item.promulgation_date
+    && item.enforcement_date
+    && item.promulgation_date === item.enforcement_date
+  );
+  const promulgationLabel = item.kind === "admin_rule" ? "발령일" : "공포일";
+  const combinedDateLabel = item.kind === "admin_rule" ? "발령·시행일" : "공포·시행일";
+  const legalDateCards = samePromulgationAndEnforcement
+    ? detailDate(combinedDateLabel, item.promulgation_date, "promulgated_effective")
+    : `${detailDate(promulgationLabel, item.promulgation_date, "promulgated")}${detailDate("시행일", item.enforcement_date, "effective")}`;
+
   return `<header class="detail-header"><div class="archive-badges">${eventBadges.join("")}<span class="material-badge">${escapeHtml(item.material_type || "자료")}</span><span class="status-badge status-${statusClass(item.status)}">${escapeHtml(item.status)}</span></div><h2 id="archiveModalTitle">${escapeHtml(item.title)}</h2><p>${escapeHtml(item.department || source)}</p><small class="detail-source-caption">출처 · ${escapeHtml(source)}</small></header>
-    <div class="detail-date-grid">${detailDate("원문 게시", item.published_date)}${detailDate("공포일", item.promulgation_date)}${detailDate("시행일", item.enforcement_date)}${detailDate("의견마감", item.deadline_date)}${detailDate("findol 수집", item.collected_at ? item.collected_at.slice(0, 10).replaceAll("-", "") : "")}</div>
+    <div class="detail-date-grid">${detailDate("원문 게시", item.published_date)}${legalDateCards}${detailDate("의견마감", item.deadline_date)}${detailDate("findol 수집", item.collected_at ? item.collected_at.slice(0, 10).replaceAll("-", "") : "")}</div>
     <section class="detail-section official-section source-verification-section"><span class="detail-section-label">공식 출처</span><h3>${escapeHtml(source)}에서 확인할 수 있어요</h3><p>${escapeHtml(item.summary || "공식 자료의 제목과 날짜 정보가 수집되었습니다.")}</p>${item.official_url ? `<a class="primary-link" href="${escapeHtml(item.official_url)}" target="_blank" rel="noopener">${escapeHtml(source)}에서 원문 확인 ↗</a>` : ""}</section>
     <section class="detail-section findol-section"><span class="detail-section-label">findol 실무 메모</span><h3>운영자 정리</h3><p>${escapeHtml(item.findol_note || "아직 운영자가 작성한 실무 메모가 없습니다. 자동 수집 정보와 수동 해설은 구분해 표시됩니다.")}</p><div class="detail-tags">${tags}</div></section>
     <div class="detail-two-column"><section class="detail-section"><h3>관련 업무</h3><ul>${tasks}</ul></section><section class="detail-section"><h3>관련 법령</h3><ul>${laws}</ul></section></div>
@@ -599,8 +610,9 @@ function renderArchiveDetail(item) {
     <p class="legal-notice">findol의 요약과 메모는 실무 참고용입니다. 법령의 정확한 문구와 적용 여부는 공식 원문 및 관계기관에서 확인하세요.</p>`;
 }
 
-function detailDate(label, value) {
-  return `<div><span>${label}</span><strong>${value ? formatDate(value) : "-"}</strong></div>`;
+function detailDate(label, value, eventCode = "") {
+  const cls = eventCode ? ` detail-date-${eventCode}` : "";
+  return `<div class="${cls.trim()}"><span>${label}</span><strong>${value ? formatDate(value) : "-"}</strong></div>`;
 }
 
 function closeArchiveModal() {

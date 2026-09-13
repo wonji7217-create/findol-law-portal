@@ -563,9 +563,22 @@ def _revision_events_for_entry(entry: models.ArchiveEntry) -> list[dict]:
     if entry.published_date:
         code, label = _published_event(entry)
         add(code, label, entry.published_date)
+
     promulgation_label = "발령" if entry.kind == "admin_rule" else "공포"
-    add("promulgated", promulgation_label, entry.promulgation_date)
-    add("effective", "시행", entry.enforcement_date)
+    if (
+        entry.promulgation_date
+        and entry.enforcement_date
+        and entry.promulgation_date == entry.enforcement_date
+    ):
+        add(
+            "promulgated_effective",
+            f"{promulgation_label}·시행",
+            entry.promulgation_date,
+        )
+    else:
+        add("promulgated", promulgation_label, entry.promulgation_date)
+        add("effective", "시행", entry.enforcement_date)
+
     add("deadline", "의견마감", entry.deadline_date)
     return events
 
@@ -600,7 +613,13 @@ def get_revision_events(
         events = [item for item in events if matches(item)]
 
     if event_type and event_type != "all":
-        events = [item for item in events if item["event_code"] == event_type]
+        if event_type in {"promulgated", "effective"}:
+            events = [
+                item for item in events
+                if item["event_code"] in {event_type, "promulgated_effective"}
+            ]
+        else:
+            events = [item for item in events if item["event_code"] == event_type]
     if year:
         prefix = str(year)
         events = [item for item in events if (item.get("event_date") or "").startswith(prefix)]
@@ -608,12 +627,13 @@ def get_revision_events(
         events = [item for item in events if task in (item.get("related_tasks") or [])]
 
     priority = {
-        "effective": 0,
-        "promulgated": 1,
-        "deadline": 2,
-        "administrative_notice": 3,
-        "legislative_notice": 4,
-        "published": 5,
+        "promulgated_effective": 0,
+        "effective": 1,
+        "promulgated": 2,
+        "deadline": 3,
+        "administrative_notice": 4,
+        "legislative_notice": 5,
+        "published": 6,
     }
     events.sort(key=lambda item: (item.get("event_date") or "", -priority.get(item.get("event_code"), 9), item.get("title") or ""), reverse=True)
     total = len(events)
@@ -626,7 +646,11 @@ def get_revision_event_stats(db: Session) -> dict:
         events.extend(_revision_events_for_entry(entry))
     today = _today_yyyymmdd()
     month_prefix = today[:6]
-    upcoming = [item for item in events if item["event_code"] in {"effective", "deadline"} and (item.get("event_date") or "") >= today]
+    upcoming = [
+        item for item in events
+        if item["event_code"] in {"effective", "promulgated_effective", "deadline"}
+        and (item.get("event_date") or "") >= today
+    ]
     return {
         "total": len(events),
         "this_month": sum(1 for item in events if (item.get("event_date") or "").startswith(month_prefix)),
@@ -756,6 +780,8 @@ def _calendar_date_basis(entry: models.ArchiveEntry, event_code: str) -> str:
         if entry.source_name == "국민참여입법센터":
             return "국민참여입법센터 공고일/예고일"
         return "공식 원문 게시일"
+    if event_code == "promulgated_effective":
+        return "국가법령정보센터 공포·발령일과 시행일이 같은 날"
     if event_code == "promulgated":
         return "국가법령정보센터 공포·발령일"
     if event_code == "effective":
@@ -790,10 +816,24 @@ def get_calendar_events(
         if "published" in selected and entry.published_date:
             published_code, published_label = _published_event(entry)
             mappings.append((published_code, published_label, entry.published_date, "published"))
-        if "promulgated" in selected:
-            mappings.append(("promulgated", "공포", entry.promulgation_date, "promulgated"))
-        if "effective" in selected:
-            mappings.append(("effective", "시행", entry.enforcement_date, "effective"))
+        promulgation_label = "발령" if entry.kind == "admin_rule" else "공포"
+        same_day = bool(
+            entry.promulgation_date
+            and entry.enforcement_date
+            and entry.promulgation_date == entry.enforcement_date
+        )
+        if same_day and {"promulgated", "effective"}.issubset(selected):
+            mappings.append((
+                "promulgated_effective",
+                f"{promulgation_label}·시행",
+                entry.promulgation_date,
+                "promulgated_effective",
+            ))
+        else:
+            if "promulgated" in selected:
+                mappings.append(("promulgated", promulgation_label, entry.promulgation_date, "promulgated"))
+            if "effective" in selected:
+                mappings.append(("effective", "시행", entry.enforcement_date, "effective"))
         if "deadline" in selected:
             mappings.append(("deadline", "의견마감", entry.deadline_date, "deadline"))
 
@@ -823,11 +863,12 @@ def get_calendar_events(
 
     priority = {
         "deadline": 0,
-        "effective": 1,
-        "promulgated": 2,
-        "administrative_notice": 3,
-        "legislative_notice": 4,
-        "published": 5,
+        "promulgated_effective": 1,
+        "effective": 2,
+        "promulgated": 3,
+        "administrative_notice": 4,
+        "legislative_notice": 5,
+        "published": 6,
     }
     events.sort(key=lambda item: (item["date"], priority.get(item["event_code"], 9), item["title"]))
     return events

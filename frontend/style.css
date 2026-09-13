@@ -2799,3 +2799,26 @@ main { max-width: var(--content); padding: 28px 28px 88px; }
   .law-flow-section, .law-guide-detail-head, .law-check-section { padding: 18px 16px; }
   .law-check-section ol { grid-template-columns: 1fr; }
 }
+
+
+/* v6.4: 공포·발령일과 시행일이 같은 날이면 하나의 결합 상태로 표시 */
+.key-promulgated_effective {
+  color: #5D5528;
+  background: linear-gradient(90deg, #FFF1E6 0 50%, #EAF6EE 50% 100%);
+  border: 1px solid #E3D6A8;
+}
+.event-promulgated_effective {
+  color: #4C5A32;
+  background: linear-gradient(90deg, #FFF1E6 0 50%, #EAF6EE 50% 100%);
+  border-color: #D9CE9C;
+}
+.event-border-promulgated_effective::before {
+  background: linear-gradient(180deg, #F09A3E 0 50%, #42A62A 50% 100%);
+}
+.detail-date-promulgated_effective {
+  background: linear-gradient(90deg, #FFF8F1 0 50%, #F0F8F2 50% 100%) !important;
+  border-top: 3px solid transparent;
+  border-image: linear-gradient(90deg, #F09A3E 0 50%, #42A62A 50% 100%) 1;
+}
+.detail-date-promulgated_effective span { color: #6D704E; }
+.detail-date-promulgated_effective strong { color: #354B32; }
